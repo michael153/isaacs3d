@@ -17,6 +17,9 @@ import numpy as np
 import rospkg
 import rospy
 import std_srvs.srv
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Quaternion, Pose, Point, Vector3
+from std_msgs.msg import Header, ColorRGBA
 from crazyflie_msgs.msg import Waypoints
 from crazyflie_isaacs_radsearch.srv import SensorReading
 
@@ -82,17 +85,40 @@ class Search:
 	def register_callbacks(self):
 		self.pub = rospy.Publisher(self._wp_topic, Waypoints, queue_size=1)
 
+		self.viz_pub = rospy.Publisher('visualization_marker', Marker, queue_size=10)
+
 		self.start_srv = rospy.Service("/start", std_srvs.srv.Empty, self.start_callback)
 		return True
 
 	def start_callback(self, req):
+		print("Sending marker")
+		time.sleep(1)
+		containers = self.grid_map.get_containers()
+		i=0
+		for container in containers:
+			pos, size = container
+			marker = Marker()
+			marker.type = Marker.CUBE
+			marker.id = i
+			marker.ns = "container"
+			marker.frame_locked = True
+			marker.action = 0
+			marker.header = Header(frame_id="world",stamp=rospy.Time.now())
+			marker.lifetime = rospy.Duration(0)
+			marker.pose = Pose(Point(pos[0],pos[1],pos[2]), Quaternion(0,0,0,1))
+			marker.scale = Vector3(size[0],size[1],size[2])
+			marker.color = ColorRGBA(0.0,1.0,0.0,1.0)
+			self.viz_pub.publish(marker)
+			i+=1
+			time.sleep(1)
+		time.sleep(3)
 		rospy.wait_for_service(self._takeoff_service)
 		self._takeoff = rospy.ServiceProxy(self._takeoff_service, std_srvs.srv.Empty)
 		try:
 			resp = self._takeoff()
 		except rospy.ServiceExeception as e:
 			rospy.logerr("Couldn't takeoff")
-		time.sleep(5)
+		time.sleep(3)
 		iteration = 0
 		while not self.solved:
 			emitters = self.run_iteration(iteration)

@@ -49,7 +49,13 @@ class GridMap2_5D(GridMap):
 				container = Container(min_c, max_c)
 				self.containers.append(container)
 				i+=7
-	
+
+	def get_containers(self):
+		container_pos = []
+		for container in self.containers:
+			container_pos.append((container.get_center(), container.get_max() - container.get_min()))
+		return container_pos
+
 	def solved(self):
 		return len(self.emitters) >= self.k
 
