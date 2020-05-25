@@ -39,6 +39,7 @@
   <!-- Services -->
   <arg name="move_service" default="/move" />
   <arg name="sensor_service" default="/sensor_reading" />
+  <arg name="takeoff_service" default="/takeoff" />
 
   <!-- TF static publisher to create a base_link frame for the crazyflie. -->
   <node pkg="tf"
@@ -129,7 +130,7 @@
         pkg="rviz"
         type="rviz"
         args="-d $(find crazyflie_simulator)/rviz/crazyflie_simulator.rviz"
-        required="false">
+        required="true">
 
     <param name="robot_description"
            command="$(find xacro)/xacro.py
@@ -148,6 +149,7 @@
 	type="SearchNode.py"
 	output="screen">
     <param name="topics/wp" value="$(arg waypoint_topic)" />
+    <param name="services/takeoff" value="$(arg takeoff_service)" />
     <param name="services/move" value="$(arg move_service)" />
     <param name="services/sensor_reading" value="$(arg sensor_service)" />
   </node>

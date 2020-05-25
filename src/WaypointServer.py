@@ -4,6 +4,7 @@ import rospy
 import std_srvs.srv
 
 import numpy as np
+import time
 
 class WaypointServer(object):
 	def __init__(self):
@@ -58,6 +59,7 @@ class WaypointServer(object):
 
 		self._ref_pub.publish(msg)
 		self._current_idx = (self._current_idx + 1) % len(self._refs)
+		time.sleep(5)
 		return []
 
 	def UpdateCallback(self, req):

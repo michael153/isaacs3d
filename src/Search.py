@@ -74,6 +74,9 @@ class Search:
 		if not rospy.has_param("~services/sensor_reading"):
 			return False
 		self._sensor_reading = rospy.get_param("~services/sensor_reading")
+		if not rospy.has_param("~services/takeoff"):
+			return False
+		self._takeoff_service = rospy.get_param("~services/takeoff")
 		return True
 
 	def register_callbacks(self):
@@ -83,6 +86,13 @@ class Search:
 		return True
 
 	def start_callback(self, req):
+		rospy.wait_for_service(self._takeoff_service)
+		self._takeoff = rospy.ServiceProxy(self._takeoff_service, std_srvs.srv.Empty)
+		try:
+			resp = self._takeoff()
+		except rospy.ServiceExeception as e:
+			rospy.logerr("Couldn't takeoff")
+		time.sleep(5)
 		iteration = 0
 		while not self.solved:
 			emitters = self.run_iteration(iteration)
