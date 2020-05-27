@@ -11,106 +11,94 @@ from ShortestPath import a_star_search, shortest_distance, get_shortest_path
 class PathPlanner:
 	def __init__(self):
 		pass
+	
+	def get_neighbors(self, p, threshold, points):
+		node = tuple(p)
+		if node not in points:
+			return None
+		result = []
+		for n in points:
+			d = self.cost(node, n)
+			if d <= threshold[0] or d <= threshold[1] or d <= threshold[2]:
+				result.append(n)
+		return result
 
-	def tsp(self, points, graph=None, start=None, end=None):
-		currlen = 0
-		mindist = float('inf')
-		graph_copy = graph
-		closest = []
-		if len(points) < 2:
-			return points
-		path = []
-		bestdist = float('inf')
-		not_found_count = 0
-		if start and end:
-			if start not in points or end not in points:
-				return -1
-			path = [start, end]
-		else:
-			path = points[0:2]
-			points = points[2:]
-		distances = []
-		distance = self.distance(path[0], path[1], graph)
-		distances = [distance] * 2
-		while points:
-			if not_found_count == 10:
-				graph = None
-			choices = []
-			if graph:
-				choices = graph.custom_neighbors(random.choice(path), points)
-			p = None
-			if len(choices) == 0:
-				p = random.choice(points)
-			else:
-				p = random.choice(choices)
-			n = path
-			if graph:
-				n = graph.custom_neighbors(p)
-			minnewlen = distance
-			bestgain = float('inf')
-			index = -1
-			found = False
-			predist = -1
-			postdist = -1
-			dist = -1
-			for i in range(0, len(path)):
-				s = time.time()
-				if path[i] not in n:
-					continue
-				found = True
-				#Check adding before this node
-				point = path[i]
-				dist = self.distance(p, point, graph)
-				if point != start:
-					prev = path[(i-1) % len(path)]
-					predist = distances[(i-1) % len(distances)]
-					newdist = self.distance(prev, p, graph) + dist
-					gain = newdist - predist
-					if gain < bestgain:
-						bestgain = gain
-						predist = newdist - dist
-						index = i
-				if point != end:
-					post = path[(i+1) % len(path)]
-					postdist = distances[(i+1) % len(distances)]
-					newdist = dist + self.distance(p, post, graph)
-					gain = newdist - postdist
-					if gain < bestgain:
-						bestgain = gain
-						postdist = newdist - dist
-						index = (i+1) % len(path)
-				e = time.time()
-				#print(e - s)
-			if found:
-				not_found_count = 0
-				path.insert(index, p)
-				distances.insert(index, postdist)
-				distances[(index-1) % len(distances)] = predist
-				points.remove(p)
-				minnewlen -= dist
-				minnewlen += predist + postdist
-			else:
-				not_found_count+=1
-		return self.expand_path(path, graph_copy)
+	def cost(self, n1, n2):
+		x, y, z = n1
+		x2, y2, z2 = n2
+		return np.sqrt((x-x2)**2+(y-y2)**2+(z-z2)**2)
 
-	"""
-	def two_opt(self, path, currlen, graph):
-		for _ in range(0, 1000):
-			i = random.randrange(0, len(path))
-			j = random.randrange(0, len(path))
-			while i == j:
-				j = random.randrange(0, len(path))
-			if graph.line_intersection(path[i], path[(j+1) % len(path)]) or graph.line_intersection(path[j], path[(i+1) % len(path)]):
-				continue
-			newlen = currlen - self.distance(path[i], path[(i+1) % len(path)], graph) - self.distance(path[j], path[(j+1) % len(path)], graph)
-			newlen += self.distance(path[i], path[(j+1) % len(path)], graph) + self.distance(path[j], path[(i+1) % len(path)], graph)
-			if newlen < currlen:
-				temp = path[(i+1) % len(path)]
-				path[(i+1) % len(path)] = path[(j+1) % len(path)]
-				path[(j+1) % len(path)] = temp
-				currlen = newlen
-		return path
-	"""
+	def find_closest(self, points, p, test=lambda x,y: True):
+		min_dist = 1000
+		closest = None
+		for point in points:
+			if self.cost(point,p) < min_dist and tuple(point) != tuple(p) and test(point, p):
+				min_dist = self.cost(point,p)
+				closest = point
+		return tuple(closest)
+
+	def tsp(self, points, graph=None, start=None, end=None, voxel_size=None, contains=None, support_points=None):
+		min_p = (10000,10000,10000)
+		for point in points:
+			if point[0] < min_p[0] and point[1] < min_p[1] and point[2] < min_p[2]:
+				min_p = point
+		included = {}
+		path = [min_p]
+		latest = min_p
+		included[min_p] = True
+		while len(included) != len(points):
+			neighbors = self.get_neighbors(latest, voxel_size, points)
+			all_in = True
+			for n in neighbors:
+				if n not in included.keys():
+					all_in = False
+					break
+			if all_in:
+				neighbors = self.get_neighbors(latest, [1000]*3, points)
+			closest = None
+			min_dist = 10000
+			for n in neighbors:
+				if self.cost(n, latest) < min_dist and not n in included.keys():
+					min_dist = self.cost(n, latest)
+					closest = n
+			path.append(closest)
+			included[closest] = True
+			latest = closest
+		insertions = {}
+		for i in range(len(path)):
+			nex_t = (i+1) % len(path)
+			o = path[i]
+			d = np.asarray(path[nex_t]) - np.asarray(path[i])
+			d = d / np.linalg.norm(d)
+			if contains(o,d):
+				close_start_support = self.find_closest(support_points, path[i])
+				close_end_support = self.find_closest(support_points, path[nex_t])
+				o2 = close_start_support
+				d2 = np.asarray(close_end_support) - np.asarray(close_start_support)
+				d2 = d2 / np.linalg.norm(d2)
+				if not contains(o2,d2):
+					insertions[i] = [close_start_support, close_end_support]
+				else:
+					mid_support = self.find_closest(support_points, close_start_support, lambda x,y: x[1] != y[1])
+					addon = [close_start_support, mid_support]
+					o3 = mid_support
+					d3 = np.asarray(close_end_support) - np.asarray(mid_support)
+					d3 = d3 / np.linalg.norm(d3)
+					while contains(o3,d3):
+						mid_support = self.find_closest(support_points, mid_support, lambda x,y: x[1] != y[1])
+						o3 = mid_support
+						d3 = np.asarray(close_end_support) - np.asarray(mid_support)
+						d3 = d3 / np.linalg.norm(d3)
+						addon.append(mid_support)
+					addon.append(close_end_support)
+					insertions[i] = addon
+		final_path = []
+		for j in range(0, len(path)):
+			final_path.append(path[j])
+			if j in insertions.keys():
+				final_path.extend(insertions[j])
+		final_path.append(final_path[0])
+		return final_path
 
 	def expand_path(self, path, graph):
 		if not graph:

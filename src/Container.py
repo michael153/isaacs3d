@@ -23,8 +23,9 @@ class Container(GridMap):
 		self.min_side = -1
 		self.drone_offset = np.array([2,2,2]) #TO-DO: Make this a variable
 		self.flight_grid = []
+		self.support_points = []
 		self.partition()
-		self.build_grid()
+		self.gen_support_points()
 		self.graph = Graph(self.flight_grid, self.contains_vector, max(self.voxel_size), self.get_observation_points())
 
 	def set_min(self, min_c):
@@ -71,7 +72,7 @@ class Container(GridMap):
 		x2, y2, z2 = p2
 		return np.sqrt((x-x2)**2+(y-y2)**2+(z-z2)**2)
 
-	def build_grid(self):
+	def gen_support_points(self):
 		start = np.array(self.min_corner) + (self.voxel_size / 2.0)
 		end = np.array(self.max_corner) - (self.voxel_size / 2.0)
 		dist = np.linalg.norm(((self.min_corner - self.max_corner) / 2.0)[0:2])
@@ -85,7 +86,7 @@ class Container(GridMap):
 					dir = pos - center
 					n_dir = dir / np.linalg.norm(dir)
 					p = center + (n_dir * (dist + offset))
-					self.flight_grid.append(p)
+					self.support_points.append(p)
 
 	def partition(self):
 		dists = np.subtract(self.max_corner, self.min_corner)
@@ -124,9 +125,9 @@ class Container(GridMap):
 					ob_pt = p + (normal * ((distper / 2.0) + self.drone_offset))
 					s_pt = p + (s_normal * ((distper / 2.0) + self.drone_offset))
 
-					if not self.contains_point(s_pt):
+					#if not self.contains_point(s_pt):
 						#print(s_pt)
-						self.flight_grid.append(s_pt)
+					#	self.flight_grid.append(s_pt)
 					self.flight_grid.append(ob_pt)
 
 					cell = ContainerCell((i,j,k), True, cb, normal, tuple(ob_pt))
@@ -155,37 +156,25 @@ class Container(GridMap):
 		return emissions_grid
 
 	def contains_vector(self, origin, direction):
-		tmin, tmax = 0.0, 0.0
-		t0x = (self.min_corner[0] - origin[0]) / direction[0]
-		t1x = (self.max_corner[0] - origin[0]) / direction[0]
-		txmin = min(t0x, t1x)
-		txmax = max(t0x, t1x)
+		tmin, tmax = -float("inf"), float("inf")
+		for i in [0,1,2]:
+			if direction[i] == 0:
+				if origin[i] < self.min_corner[i] or origin[i] > self.max_corner[i]:
+					return False
+			else:
+				t0i = (self.min_corner[i] - origin[i]) / direction[i]
+				t1i = (self.max_corner[i] - origin[i]) / direction[i]
 
-		t0y = (self.min_corner[1] - origin[1]) / direction[1]
-		t1y = (self.max_corner[1] - origin[1]) / direction[1]
-		tymin = min(t0y, t1y)
-		tymax = max(t0y, t1y)
+				tmini = min(t0i,t1i)
+				tmaxi = max(t0i,t1i)
+				if tmini > tmin:
+					tmin = tmini
+				if tmaxi < tmax:
+					tmax = tmaxi
 
-		t0z = (self.min_corner[2] - origin[2]) / direction[2]
-		t1z = (self.max_corner[2] - origin[2]) / direction[2]
-		tzmin = min(t0z, t1z)
-		tzmax = max(t0z, t1z)
-
-		if txmin > tymax or tymin > txmax:
-			return False
-
-		tmin = max(txmin, tymin)
-		tmax = min(txmax, tymax)
-
-		if tmin > tzmax or tzmin > tmax:
-			return False
-
-		tmin = max(tmin, tzmin)
-		tmax = min(tmax, tzmax)
-
-		if tmax <= 1 and tmin >= 0:
-			return True
-		return False
+				if tmin > tmax or tmax < 0:
+					return False
+		return True
 
 	def contains_point(self, point):
 		if point[0] <= self.max_corner[0] and point[0] >= self.min_corner[0]:
@@ -236,6 +225,20 @@ class Container(GridMap):
 		sp.scatter(px, py, pz)
 		sp.scatter(ox, oy, oz)
 		sp.scatter(cx, cy, cz)
+		sp.scatter(ex, ey, ez)
+		plt.show()
+
+	def display_support_points(self):
+		print(self.support_points)
+		ex = []
+		ey = []
+		ez = []
+		for pt in self.support_points:
+			ex.append(pt[0])
+			ey.append(pt[1])
+			ez.append(pt[2])
+		fig = plt.figure()
+		sp = fig.add_subplot(111, projection="3d")
 		sp.scatter(ex, ey, ez)
 		plt.show()
 

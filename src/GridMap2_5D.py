@@ -82,56 +82,12 @@ class GridMap2_5D(GridMap):
 		return true_emissions
 
 	def get_raster_path(self):
-		if len(self.containers) == 1:
-			path = self.path_planner.tsp(self.containers[0].get_observation_points(), self.containers[0].graph)
-			transport_path = get_shortest_path(self.containers[0].graph, path[len(path)-1], path[0])
-			path.extend(transport_path[1:len(transport_path)-1])
-			return path
-
-		ob_pts = {}
-		all_pts = []
-		containers = []
-		c_graphs = {}
+		all_support_points = []
+		all_obs_points = []
 		for container in self.containers:
-			center = tuple(container.get_center())
-			ob_pts[center] = container.get_observation_points()
-			all_pts.extend(container.get_flight_grid())
-			c_graphs[center] = container.graph
-			containers.append(center)
-
-		start_pt = (-40,-40,7.5)
-		start_container = min(containers, key=lambda x: self.distance(start_pt, x))
-		end_container = max(containers, key=lambda x: self.distance(start_pt, x))
-		path = []
-		c_path = self.path_planner.tsp(containers, start=start_container, end=end_container)
-		c_path = c_path[1:len(c_path)-1]
-		big_graph = Graph(all_pts, self.all_contains, 100)
-		for i in range(0, len(c_path)):
-			curr_container = c_path[i]
-			next_container = c_path[(i+1) % len(c_path)]
-			o_pts = ob_pts[curr_container]
-			best_start_dist = float('inf')
-			best_start_point = None
-			best_end_dist = float('inf')
-			best_end_point = None
-			for pt in o_pts:
-				start_d = self.distance(pt, start_pt)
-				end_d = self.distance(pt, next_container)
-				if start_d < best_start_dist:
-					best_start_dist = start_d
-					best_start_point = pt
-				if end_d < best_end_dist:
-					best_end_dist = end_d
-					best_end_point = pt
-			if i != 0:
-				transport_path = get_shortest_path(big_graph, start_pt, best_start_point)
-				path.extend(transport_path[1:len(transport_path)-1])
-			container_path = self.path_planner.tsp(o_pts, c_graphs[curr_container], best_start_point, best_end_point)
-			path.extend(container_path)
-			start_pt = best_end_point
-		transport_path = get_shortest_path(big_graph, path[len(path)-1], path[0])
-		path.extend(transport_path[1:len(transport_path)-1])
-#		self.path_planner.display_path(path)
+			all_support_points.extend(container.support_points)
+			all_obs_points.extend(container.get_observation_points())
+		path = self.path_planner.tsp(all_obs_points, voxel_size=self.containers[0].voxel_size, contains=self.all_contains, support_points=all_support_points)
 		return path
 
 	def fake_measurement(self, loc):
