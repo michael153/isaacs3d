@@ -95,23 +95,47 @@ class Search:
 		time.sleep(1)
 		containers = self.grid_map.get_containers()
 		i=0
+		line_points = []
 #		print(self.grid_map
-		for container in containers:
-			pos, size = container
-			marker = Marker()
-			marker.type = Marker.CUBE
-			marker.id = i
-			marker.ns = "container"
-			marker.frame_locked = True
-			marker.action = 0
-			marker.header = Header(frame_id="world",stamp=rospy.Time.now())
-			marker.lifetime = rospy.Duration(0)
-			marker.pose = Pose(Point(pos[0],pos[1],pos[2]), Quaternion(0,0,0,1))
-			marker.scale = Vector3(size[0]+0.1,size[1]+0.1,size[2]+0.1)
-			marker.color = ColorRGBA(0.5,0.5,0.5,0.5)
+		for container in self.grid_map.containers:
+		#	pos, size = container
+		#	marker = Marker()
+		#	marker.type = Marker.CUBE
+		##	marker.id = i
+		#	marker.ns = "container"
+		#	marker.frame_locked = True
+		#	marker.action = 0
+		#	marker.header = Header(frame_id="world",stamp=rospy.Time.now())
+		#	marker.lifetime = rospy.Duration(0)
+		#	marker.pose = Pose(Point(pos[0],pos[1],pos[2]), Quaternion(0,0,0,1))
+		#	marker.scale = Vector3(size[0]+0.1,size[1]+0.1,size[2]+0.1)
+		#	marker.color = ColorRGBA(0.5,0.5,0.5,0.5)
 #			self.viz_pub.publish(marker)
 			#self.viz_pub.publish(marker_list)
 			i+=1
+			max_p = container.get_max()
+			min_p = container.get_min()
+			one = Point(max_p[0],min_p[1],min_p[2])
+			two = Point(max_p[0],max_p[1],min_p[2])
+			three = Point(max_p[0],min_p[1],max_p[2])
+			four = Point(min_p[0],min_p[1],max_p[2])
+			five = Point(min_p[0],max_p[1],max_p[2])
+			six = Point(min_p[0],max_p[1],min_p[2])
+			max_p = Point(max_p[0], max_p[1], max_p[2])
+			min_p = Point(min_p[0], min_p[1], min_p[2])
+			line_points = [min_p,one,one,two,two,max_p,one,three,three,four,four,five,five,six,five,max_p,three,max_p,min_p,four,two,six,min_p,six]
+			line_marker = Marker()
+			line_marker.type = Marker.LINE_LIST
+			line_marker.id = i+10000
+			line_marker.ns = "container"
+			line_marker.frame_locked = True
+			line_marker.action = 0
+			line_marker.header = Header(frame_id="world", stamp = rospy.Time.now())
+			line_marker.pose = Pose(Point(0,0,0), Quaternion(0,0,0,1))
+			line_marker.scale = Vector3(0.5,0.5,0.5)
+			line_marker.points = line_points
+			line_marker.color = ColorRGBA(0.0,0.0,0.0,1.0)
+			self.viz_pub.publish(line_marker)
 			time.sleep(1)
 		time.sleep(3)
 		rospy.wait_for_service(self._takeoff_service)
@@ -122,9 +146,38 @@ class Search:
 			rospy.logerr("Couldn't takeoff")
 		time.sleep(3)
 		iteration = 0
+		emitters = []
 		while not self.solved:
 			emitters = self.run_iteration(iteration)
 			iteration+=1
+		w = 0
+		for container in self.grid_map.containers:
+			cells = container.get_cells()
+			dist_per = container.voxel_size
+			cell_pos = []
+			cell_col = []
+			for cell in cells:
+				p = cell.get_pos()
+				cell_pos.append(Point(p[0],p[1],p[2]))
+				if p in emitters:
+					cell_col.append(ColorRGBA(1.0,0.0,0.0,1.0))
+				else:
+					cell_col.append(ColorRGBA(0.5,0.5,0.5,1.0))
+			marker_list = Marker()
+			marker_list.type = Marker.CUBE_LIST
+			marker_list.id = w + 15000
+			marker_list.ns = "container"
+			marker_list.frame_locked = True
+			marker_list.action = 0
+			marker_list.header = Header(frame_id="world", stamp=rospy.Time.now())
+			marker_list.lifetime = rospy.Duration(0)
+			marker_list.pose = Pose(Point(0,0,0), Quaternion(0,0,0,1))
+			marker_list.scale = Vector3(dist_per[0], dist_per[1], dist_per[2])
+			marker_list.points = cell_pos
+			marker_list.colors = cell_col
+			w+=1
+#			voxel_markers.append(marker_list)
+			self.viz_pub.publish(marker_list)
 		print(emitters)
 		return []
 
@@ -181,7 +234,11 @@ class Search:
 				pass
 			sensing_config = self.grid_map.get_sensing_config(self.raster_path, self.tau, iteration)
 			#Simulate flying a round of data collection
-			sensing_config = intermediate_path.extend(sensing_config)
+			print(intermediate_path)
+			for i in range(len(intermediate_path)):
+				intermediate_path[i] = (intermediate_path[i],2)
+			sensing_config = intermediate_path + sensing_config
+			print(sensing_config)
 			x = []
 			y = []
 			z = []

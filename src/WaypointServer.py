@@ -74,7 +74,7 @@ class WaypointServer(object):
 		marker.header = Header(frame_id="world", stamp = rospy.Time.now())
 		marker.lifetime = rospy.Duration(0)
 		marker.pose = Pose(Point(pos[0],pos[1],pos[2]), Quaternion(0,0,0,1))
-		marker.scale = Vector3(0.3,0.3,0.3)
+		marker.scale = Vector3(0.5,0.5,0.5)
 		marker.color = ColorRGBA(0.0,1.0,0.0,1.0)
 		self._viz_pub.publish(marker)
 
@@ -101,7 +101,7 @@ class WaypointServer(object):
 			rospy.logerr("No waypoints passed")
 		if not (len(req.x) == len(req.y) == len(req.z)):
 			rospy.logerr("Coordinate arrays are different lengths")
-
+		self._refs = []
 		for i in range(len(req.x)):
 			pos = np.array([req.x[i], req.y[i], req.z[i]])
 			self._refs.append(pos)
