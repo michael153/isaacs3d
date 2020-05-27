@@ -152,18 +152,21 @@ class GridMap2_5D(GridMap):
 
 	def update_sets(self, lcb_grid, ucb_grid):
 		remaining_candidates = self.k - len(self.emitters)
-		sorted = np.sort(ucb_grid, axis=None)
+		sorted_ucb = np.sort(ucb_grid, axis=None)
+		sorted_lcb = np.sort(lcb_grid, axis=None)
 		cells = self.all_cells()
 		for i in range(0, len(cells)):
 			cell = cells[i]
 			if cell not in self.possible_sources:
 				continue
 			cell_pos = cell.get_pos()
-			if lcb_grid[i] > sorted[(sorted.size - 2) - remaining_candidates]:
+			if lcb_grid[i] > sorted_ucb[(sorted_ucb.size - 2) - remaining_candidates]:
 				self.emitters.append(cell)
 				self.possible_sources.remove(cell)
+			elif ucb_grid[i] < sorted_lcb[-remaining_candidates]:
+				self.possible_sources.remove(cell)
 			cell.get_confidence_bounds().set_LB(lcb_grid[i])
-			cell.get_confidence_bounds().set_UB(lcb_grid[i])
+			cell.get_confidence_bounds().set_UB(ucb_grid[i])
 
 	def get_sensing_config(self, raster_path, tau, iteration):
 		sensing_config = []

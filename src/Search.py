@@ -95,32 +95,7 @@ class Search:
 		time.sleep(1)
 		containers = self.grid_map.get_containers()
 		i=0
-		for container in self.grid_map.containers:
-			cells = container.get_cells()
-			dist_per = container.voxel_size
-			cell_pos = []
-			cell_col = []
-			for cell in cells:
-				p = cell.get_pos()
-				cell_pos.append(Point(p[0],p[1],p[2]))
-				if cell in  self.grid_map.possible_sources:
-					cell_col.append(ColorRGBA(1.0,0.0,0.0,1.0))
-				else:
-					cell_col.append(ColorRGBA(0.5,0.5,0.5,1.0))
-			marker_list = Marker()
-			marker_list.type = Marker.CUBE_LIST
-			marker_list.id = i
-			marker_list.ns = "container"
-			marker_list.frame_locked = True
-			marker_list.action = 0
-			marker_list.header = Header(frame_id="world", stamp=rospy.Time.now())
-			marker_list.lifetime = rospy.Duration(0)
-			marker_list.pose = Pose(Point(0,0,0), Quaternion(0,0,0,1))
-			marker_list.scale = Vector3(dist_per[0], dist_per[1], dist_per[2])
-			marker_list.points = cell_pos
-			marker_list.colors = cell_col
-			self.viz_pub.publish(marker_list)
-			i+=1
+#		print(self.grid_map
 		for container in containers:
 			pos, size = container
 			marker = Marker()
@@ -134,7 +109,7 @@ class Search:
 			marker.pose = Pose(Point(pos[0],pos[1],pos[2]), Quaternion(0,0,0,1))
 			marker.scale = Vector3(size[0]+0.1,size[1]+0.1,size[2]+0.1)
 			marker.color = ColorRGBA(0.5,0.5,0.5,0.5)
-			self.viz_pub.publish(marker)
+#			self.viz_pub.publish(marker)
 			#self.viz_pub.publish(marker_list)
 			i+=1
 			time.sleep(1)
@@ -164,6 +139,40 @@ class Search:
 			self.solved = True
 			return emitters
 		else:
+			i=0
+			print(self.grid_map.possible_sources)
+			for cell in self.grid_map.all_cells():
+				cb = cell.get_confidence_bounds()
+				print(str(cb.get_LB()), str(cb.get_UB()))
+			voxel_markers = []
+			for container in self.grid_map.containers:
+				cells = container.get_cells()
+				dist_per = container.voxel_size
+				cell_pos = []
+				cell_col = []
+				for cell in cells:
+					p = cell.get_pos()
+					cell_pos.append(Point(p[0],p[1],p[2]))
+					if cell in  self.grid_map.possible_sources:
+						cell_col.append(ColorRGBA(1.0,0.0,0.0,1.0))
+					else:
+						cell_col.append(ColorRGBA(0.5,0.5,0.5,1.0))
+				marker_list = Marker()
+				marker_list.type = Marker.CUBE_LIST
+				marker_list.id = i
+				marker_list.ns = "container"
+				marker_list.frame_locked = True
+				marker_list.action = 0
+				marker_list.header = Header(frame_id="world", stamp=rospy.Time.now())
+				marker_list.lifetime = rospy.Duration(0)
+				marker_list.pose = Pose(Point(0,0,0), Quaternion(0,0,0,1))
+				marker_list.scale = Vector3(dist_per[0], dist_per[1], dist_per[2])
+				marker_list.points = cell_pos
+				marker_list.colors = cell_col
+				voxel_markers.append(marker_list)
+				self.viz_pub.publish(marker_list)
+				i+=1
+
 			sensing_config = self.grid_map.get_sensing_config(self.raster_path, self.tau, iteration)
 			#Simulate flying a round of data collection
 			x = []
@@ -182,6 +191,9 @@ class Search:
 			self.fly_round(sensing_config, self.search.new_measurement)
 			if self.verbose:
 				print("Iteration complete")
+			for m in voxel_markers:
+				m.action = 2
+				self.viz_pub.publish(m)
 
 	"""
 	Runs the main algorithm
