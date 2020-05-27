@@ -172,9 +172,16 @@ class Search:
 				voxel_markers.append(marker_list)
 				self.viz_pub.publish(marker_list)
 				i+=1
-
+			last = self.raster_path[0]
+			self.raster_path = self.grid_map.get_raster_path()
+			intermediate_path = []
+			if last != self.raster_path[0]:
+				intermediate_path = self.grid_map.get_no_collision_path(last, self.raster_path[0])
+			else:
+				pass
 			sensing_config = self.grid_map.get_sensing_config(self.raster_path, self.tau, iteration)
 			#Simulate flying a round of data collection
+			sensing_config = intermediate_path.extend(sensing_config)
 			x = []
 			y = []
 			z = []

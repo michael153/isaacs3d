@@ -86,9 +86,19 @@ class GridMap2_5D(GridMap):
 		all_obs_points = []
 		for container in self.containers:
 			all_support_points.extend(container.support_points)
-			all_obs_points.extend(container.get_observation_points())
+		for cell in self.all_cells():
+			if cell in self.possible_sources:
+				all_obs_points.append(cell.get_observation_point())
 		path = self.path_planner.tsp(all_obs_points, voxel_size=self.containers[0].voxel_size, contains=self.all_contains, support_points=all_support_points)
 		return path
+
+	def get_no_collision_path(self, p1, p2):
+		points = [p1,p2]
+		all_support_points = []
+		for container in self.containers:
+			all_support_points.extend(container.support_points)
+		path = self.path_planner.tsp(points, voxel_size=self.containers[0].voxel_size, contains=self.all_contains, support_points=all_support_points)
+		return path[:len(path)-1]
 
 	def fake_measurement(self, loc):
 		# Y := total observed measurement at a given time
