@@ -1,6 +1,7 @@
 """Extract containers from point cloud and calculate surface corners of each container face"""
 
 import os
+import math
 import time
 import pickle
 import colorsys
@@ -16,6 +17,7 @@ VOXEL_SIZE = 0.1
 NORMALS_KDTREE_SEARCH_RADIUS = 0.3
 CONTAINER_HEIGHT = 8.5 * 0.3048  # 8.5 ft to meters
 CONTAINER_EPS = 0.75  # to account for height error
+RASTER_TICK_SIZE = 0.5  # in meters
 
 
 def get_color_palette(num_colors=20):
@@ -49,7 +51,7 @@ def is_noise_cluster(pcd, cluster_points):
     return max_height - min_height < (CONTAINER_HEIGHT - CONTAINER_EPS)
 
 
-def is_container( # pylint: disable=too-many-arguments
+def is_container(  # pylint: disable=too-many-arguments
         pcd,
         cluster_points,
         dist=0.05,
@@ -243,7 +245,7 @@ def graph_surface_containers(container_surface_corners):
     plt.show()
 
 
-def rasterize_container_face(corner_points, points_per_side=10):  # pylint: disable=too-many-locals
+def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
     """Constructs a raster path off a container face. The input corner points are
     in CCW order.
     """
@@ -258,37 +260,75 @@ def rasterize_container_face(corner_points, points_per_side=10):  # pylint: disa
     get_dist = lambda u, v: np.sqrt((u[2] - v[2])**2 + (u[1] - v[1])**2 +
                                     (u[0] - v[0])**2)
 
+    rail_dists = [
+        get_dist(rails[0][0], rails[0][1]),
+        get_dist(rails[1][0], rails[1][1])
+    ]
+
+    diverging_rails_flag = abs(rail_dists[0] - rail_dists[1]) > RASTER_TICK_SIZE
+
     # Dist between two ticks for each rail
-    tickdists = []
-    for rail_id in range(2):
-        tickdists.append(
-            get_dist(rails[rail_id][0], rails[rail_id][1]) /
-            (points_per_side - 1))
+    tickdists = [RASTER_TICK_SIZE, RASTER_TICK_SIZE]
+    # Remainder values if ticks aren't even (aligned with edge of rail)
+    rail_remainders = [
+        rail_dists[0] -
+        (math.floor(rail_dists[0] / RASTER_TICK_SIZE) * RASTER_TICK_SIZE),
+        rail_dists[1] -
+        (math.floor(rail_dists[1] / RASTER_TICK_SIZE) * RASTER_TICK_SIZE)
+    ]
+    points_per_rail = 1 + math.ceil(min(rail_dists) / RASTER_TICK_SIZE)
+
+    if diverging_rails_flag:
+        tickdists = []
+        for rail_id in range(2):
+            tickdists.append(rail_dists[rail_id] / (points_per_rail - 1))
 
     parity = 0
     raster_points = []
 
+    r1_dir = rails[0][1] - rails[0][0]
+    r1_dir /= np.linalg.norm(r1_dir)
+    r2_dir = rails[1][1] - rails[1][0]
+    r2_dir /= np.linalg.norm(r2_dir)
+
     # Get the corresponding tickpoints along the rails
-    # Iterate through the ticks along the rail lines
-    for r_tick_id in range(points_per_side):
+    # Running magnitudes
+    running_mag_r1 = 0
+    running_mag_r2 = 0
+
+    for r_tick_id in range(points_per_rail):
+        # last tick might not be complete RASTER_TICK_SIZE
+        if r_tick_id == points_per_rail - 1:
+            running_mag_r1 += rail_remainders[0]
+            running_mag_r2 += rail_remainders[1]
+
         # Tickpoint on rail 1
-        r1_dir = rails[0][1] - rails[0][0]
-        r1_dir /= np.linalg.norm(r1_dir)
-        pt_r1 = rails[0][0] + r_tick_id * tickdists[0] * r1_dir
+        pt_r1 = rails[0][0] + running_mag_r1 * r1_dir
         # Tickpoint on rail 2
-        r2_dir = rails[1][1] - rails[1][0]
-        r2_dir /= np.linalg.norm(r2_dir)
-        pt_r2 = rails[1][0] + r_tick_id * tickdists[1] * r2_dir
+        pt_r2 = rails[1][0] + running_mag_r2 * r2_dir
+
+        running_mag_r1 += tickdists[0]
+        running_mag_r2 += tickdists[1]
 
         # Extract rail-normal interior points
-        n_tickdist = get_dist(pt_r1, pt_r2) / (points_per_side - 1)
+        norm_dir = pt_r2 - pt_r1
+        norm_dir /= np.linalg.norm(norm_dir)
+
+        rail_normal_dist = get_dist(pt_r1, pt_r2)
+        rail_normal_remainder = rail_normal_dist - math.floor(
+            rail_normal_dist / RASTER_TICK_SIZE) * RASTER_TICK_SIZE
+        points_per_rail_normal = math.ceil(1 +
+                                           rail_normal_dist / RASTER_TICK_SIZE)
+
         path_segment = []
 
-        # Iterate through the ticks along the normal line
-        for n_tick_id in range(points_per_side):
-            norm_dir = pt_r2 - pt_r1
-            norm_dir /= np.linalg.norm(norm_dir)
-            path_segment.append(pt_r1 + n_tick_id * n_tickdist * norm_dir)
+        running_mag_rail_normal = 0
+        for n_tick_id in range(points_per_rail_normal):
+            if n_tick_id == points_per_rail_normal - 1:
+                running_mag_rail_normal += rail_normal_remainder
+
+            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir)
+            running_mag_rail_normal += RASTER_TICK_SIZE
 
         # Reverse every other path segment to form raster path
         parity = 1 - parity
@@ -298,9 +338,9 @@ def rasterize_container_face(corner_points, points_per_side=10):  # pylint: disa
     return raster_points
 
 
-def plot_raster_path(raster_paths):
-    """Plot surface raster path"""
-    fig = plt.figure(figsize=(10, 6))
+def plot_raster_paths(raster_paths):
+    """Plot surface raster paths"""
+    fig = plt.figure(figsize=(15, 8))
     for i, raster_path in enumerate(raster_paths):
         ax = fig.add_subplot(6, 6, (i + 1), projection='3d')  # pylint: disable=invalid-name
         cur_direction = None
@@ -331,12 +371,13 @@ def plot_raster_path(raster_paths):
 class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     """Container point cloud class"""
 
-    def __init__(self,
-                 in_pc_path,
-                 out_filtered_pc_path,
-                 out_surface_corners_path,
-                 out_raster_paths,
-                 verbose=True):
+    def __init__( #pylint: disable=too-many-arguments
+            self,
+            in_pc_path,
+            out_filtered_pc_path,
+            out_surface_corners_path,
+            out_raster_paths,
+            verbose=True):
         self.verbose = verbose
         self.out_filtered_pc_path = out_filtered_pc_path
         self.out_surface_corners_path = out_surface_corners_path
@@ -448,12 +489,12 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
             self.noise_points + self.non_container_ids, invert=True)
 
     def rasterize_surfaces(self):
+        """Generate raster paths for each of the container surfaces."""
         self.raster_paths = []
-        for i, shape in enumerate(self.container_surface_corners):
+        for shape in self.container_surface_corners:
             pts, _ = shape
             raster_path = rasterize_container_face(pts)
             self.raster_paths.append(raster_path)
-
 
     def write(self):
         """Writes the filtered point cloud, container surface corner points, and raster paths
@@ -479,7 +520,8 @@ def main():
     in_pc_path = os.path.join(search_directory,
                               "25d_051_2020_11_25_18_54_50_cleaned.ply")
     out_filtered_pc_path = os.path.join(search_directory, "filtered_pc.ply")
-    out_surface_corners_path = os.path.join(search_directory, "surface_corners.pkl")
+    out_surface_corners_path = os.path.join(search_directory,
+                                            "surface_corners.pkl")
     out_raster_paths = os.path.join(search_directory, "raster_paths.pkl")
 
     cpc = ContainerPointCloud(in_pc_path,
@@ -495,7 +537,7 @@ def main():
 
     plot_container_surfaces(cpc.cluster_planes)
     graph_surface_containers(cpc.container_surface_corners)
-    plot_raster_path(cpc.raster_paths)
+    plot_raster_paths(cpc.raster_paths)
 
 
 if __name__ == '__main__':
