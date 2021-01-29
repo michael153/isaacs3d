@@ -297,7 +297,7 @@ def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
     running_mag_r2 = 0
 
     for r_tick_id in range(points_per_rail):
-        # last tick might not be complete RASTER_TICK_SIZE
+        # add remainder for last tick
         if r_tick_id == points_per_rail - 1:
             running_mag_r1 += rail_remainders[0]
             running_mag_r2 += rail_remainders[1]
