@@ -244,6 +244,108 @@ def graph_surface_containers(container_surface_corners):
     axs[1].view_init(azim=0, elev=90)
     plt.show()
 
+def connect_faces(raster_paths):
+    # Find how to optimally connect each raster path
+    avg_pts = []
+    #print(len(raster_paths))
+    for path in raster_paths:
+        path = np.array(path)
+        #print(path.shape)
+        avg_pt = np.sum(path, axis=0) / path.shape[0]
+        #print(avg_pt.shape)
+        avg_pts.append(avg_pt)
+    num_pts = len(avg_pts)
+    avg_pts = np.array(avg_pts)
+    #print(avg_pts)
+    tour = np.random.permutation(np.arange(num_pts))
+    for temp in np.logspace(5,0,num=5000):
+        [i,j] = np.random.randint(0,num_pts,2)
+        new_pts = np.copy(avg_pts)
+        new_pts[[i,j],:] = avg_pts[[j,i],:]
+        new_tour = np.copy(tour)
+        new_tour[[i,j]] = tour[[j,i]]
+        new_cost = sum([np.sqrt(np.sum(np.power((new_pts[p] - new_pts[(p+1) % num_pts]),2))) for p in range(num_pts)])
+        old_cost = sum([np.sqrt(np.sum(np.power((avg_pts[p] - avg_pts[(p+1) % num_pts]),2))) for p in range(num_pts)])
+        if np.exp((old_cost - new_cost) / temp) > np.random.random():
+            tour = np.copy(new_tour)
+            avg_pts = np.copy(new_pts)
+    #plt.plot([avg_pts[i % num_pts] for i in range(num_pts+1)],[avg_pts[(i+1)%num_pts] for i in range(num_pts+1)], 'xb-')
+    #plt.show()
+    connections = make_connections(tour, avg_pts, raster_paths)
+    return (tour, avg_pts, connections)
+
+def make_connections(tour, avg_pts, raster_paths):
+    num_pts = len(avg_pts)
+    connections = []
+    for i, stop in enumerate(tour):
+        next_stop = tour[(i+1)%num_pts]
+        first = avg_pts[stop]
+        second = avg_pts[next_stop]
+        path = raster_paths[stop]
+        min_dist = 10000
+        min_index = -1
+        for j, point in enumerate(path):
+            dist = np.sqrt(np.sum(np.power((point - second),2)))
+            if dist < min_dist:
+                min_index = j
+                min_dist = dist
+        first_point = path[min_index]
+        first_index = min_index
+        second_path = raster_paths[next_stop]
+        min_dist = 10000
+        min_index = -1
+        for j, point in enumerate(second_path):
+            dist = np.sqrt(np.sum(np.power((point - first_point),2)))
+            if dist < min_dist:
+                min_index = j
+                min_dist = dist
+        first_p = (first_point, first_index)
+        second_p = (second_path[min_index], min_index)
+        connections.append([first_p, second_p])
+    return connections
+
+def intersects_container(o, d, max_t, container_corners):
+    for shape in container_corners:
+        pts, color = shape
+        A = pts[0] - pts[1]
+        B = pts[2] - pts[1]
+        C = pts[3]
+        N = np.cross(A,B)
+        denom = np.dot(d, N)
+        if abs(denom) > 0.0001:
+            t = np.dot((C - o), N) / denom
+            if t < max_t and t > 0:
+                return True
+    return False
+
+def make_full_path(tour, avg_pts, raster_paths, connections, corners):
+    final_connections = []
+    for index, connect in enumerate(connections):
+        fp, sp = connect
+        o = fp[0]
+        d = sp[0] - fp[0]
+        max_t = 1.0
+        count = 0
+        while intersects_container(o, d, max_t, corners):
+            if count > 10:
+                print("failure")
+                exit()
+            avg_pt = avg_pts[tour[index]]
+            avg_pt2 = avg_pts[tour[(index+1)%len(tour)]]
+            if count % 2 == 0:
+                new_o = o + (o - avg_pt) * 0.1
+                o = new_o
+            else:
+                new_d = sp[0] + (sp[0] - avg_pt2) * 0.1
+                d = new_d - o
+        first_point = (fp, o)
+        second_point = (sp, o + d)
+        final_connections.append([first_point, second_point])
+    return final_connections
+
+
+def connect_face_paths(raster_paths, cluster_planes):
+    pass
 
 def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
     """Constructs a raster path off a container face. The input corner points are
@@ -340,9 +442,10 @@ def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
 
 def plot_raster_paths(raster_paths):
     """Plot surface raster paths"""
-    fig = plt.figure(figsize=(15, 8))
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
     for i, raster_path in enumerate(raster_paths):
-        ax = fig.add_subplot(6, 6, (i + 1), projection='3d')  # pylint: disable=invalid-name
+        #ax = fig.add_subplot(6, 6, (i + 1), projection='3d')  # pylint: disable=invalid-name
         cur_direction = None
         cur_norm = None
         for j, point in enumerate(raster_path):
@@ -363,8 +466,7 @@ def plot_raster_paths(raster_paths):
                       direction[0],
                       direction[1],
                       direction[2],
-                      length=norm / 3,
-                      color='blue')
+                      length=norm / 3)
     plt.show()
 
 
@@ -515,7 +617,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
 
 def main():
     """Main method."""
-    search_directory = "/Users/michaelwan/Desktop/CS/School (CS)/research/"
+    search_directory = "./"
 
     in_pc_path = os.path.join(search_directory,
                               "25d_051_2020_11_25_18_54_50_cleaned.ply")
@@ -534,6 +636,9 @@ def main():
     cpc.calculate_surfaces()
     cpc.rasterize_surfaces()
     cpc.write()
+
+    tour, avg_pts, connections = connect_faces(cpc.raster_paths)
+    final_connections = make_full_path(tour, avg_pts, cpc.raster_paths, connections, cpc.container_surface_corners)
 
     plot_container_surfaces(cpc.cluster_planes)
     graph_surface_containers(cpc.container_surface_corners)
