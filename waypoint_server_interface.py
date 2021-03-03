@@ -4,6 +4,19 @@ can send waypoints for each registered drone."""
 import roslibpy
 from sensor_msgs.msg import NavSatFix
 
+"""Preprocess the container point cloud and find the raster path"""
+search_directory = "./"
+in_pc_path = os.path.join(search_directory, "25d_051_2020_11_25_18_54_50_cleaned.ply")
+cpc = ContainerPointCloud(in_pc_path=in_pc_path, verbose=False)
+cpc.remove_ground_points()
+cpc.cluster_entities()
+cpc.calculate_surfaces()
+cpc.rasterize_surfaces()
+
+tour, avg_pts, connections = container_extraction.connect_faces(cpc.raster_paths)
+final_connections = container_extraction.make_full_path(tour,
+    avg_pts, cpc.raster_paths, connections, cpc.container_surface_corners)
+
 class WaypointServerInterface:
     """Connects to server, registers the drone and sends waypoints"""
 
@@ -37,6 +50,7 @@ class WaypointServerInterface:
         result = save_topics_service.call(save_topics_request)
         print(f'Topics_service response{result}')
         print()
+
         return drone_id
 
     def send_waypoints(self, drone_id, waypoints):
@@ -58,26 +72,13 @@ class WaypointServerInterface:
         print(f"Service response: {result}")
         return result
 
+if __name__ == "__main__":
+    drone_name = 'test_drone'
+    drone_type = "DjiMatrice"
+    topics_published = [{'name': 'test_name',
+                        'type': 'std_msgs/String'}]
+    waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6)]
 
-search_directory = "./"
-
-in_pc_path = os.path.join(search_directory, "25d_051_2020_11_25_18_54_50_cleaned.ply")
-cpc = ContainerPointCloud(in_pc_path=in_pc_path, verbose=False)
-cpc.remove_ground_points()
-cpc.cluster_entities()
-cpc.calculate_surfaces()
-cpc.rasterize_surfaces()
-
-tour, avg_pts, connections = container_extraction.connect_faces(cpc.raster_paths)
-final_connections = container_extraction.make_full_path(tour,
-    avg_pts, cpc.raster_paths, connections, cpc.container_surface_corners)
-
-drone_name = 'test_drone'
-drone_type = "DjiMatrice"
-topics_published = [{'name': 'test_name',
-                    'type': 'std_msgs/String'}]
-waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6)]
-
-wsi = WaypointServerInterface()
-drone_id = wi.register_drone_with_server(drone_name, drone_type, topics_published)
-wsi.send_waypoints(drone_id, final_connections)
+    wsi = WaypointServerInterface()
+    drone_id = wi.register_drone_with_server(drone_name, drone_type, topics_published)
+    wsi.send_waypoints(drone_id, final_connections)
