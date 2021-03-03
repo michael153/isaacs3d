@@ -473,18 +473,27 @@ def plot_raster_paths(raster_paths):
 class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     """Container point cloud class"""
 
-    def __init__( #pylint: disable=too-many-arguments
+    def __init__(  #pylint: disable=too-many-arguments
             self,
-            in_pc_path,
-            out_filtered_pc_path,
-            out_surface_corners_path,
-            out_raster_paths,
-            verbose=True):
+            in_pc_path=None,
+            out_filtered_pc_path=None,
+            out_surface_corners_path=None,
+            out_raster_paths=None,
+            verbose=True,
+            pcd=None):
+
         self.verbose = verbose
         self.out_filtered_pc_path = out_filtered_pc_path
         self.out_surface_corners_path = out_surface_corners_path
         self.out_raster_paths = out_raster_paths
-        self.pcd = o3d.io.read_point_cloud(in_pc_path)
+
+        if pcd:
+            self.pcd = pcd
+        elif in_pc_path:
+            self.pcd = o3d.io.read_point_cloud(in_pc_path)
+        else:
+            raise Exception("No point cloud source specified")
+
         self.pcd = self.pcd.voxel_down_sample(voxel_size=DOWNSAMPLE_SIZE)
         self.noise_points = None
         self.ground_normal = None
@@ -495,6 +504,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         self.non_container_ids = None
         self.container_surface_corners = None
         self.raster_paths = None
+
         if verbose:
             print(self.pcd.points)
 
@@ -601,6 +611,8 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     def write(self):
         """Writes the filtered point cloud, container surface corner points, and raster paths
         to their respective appropriate file paths"""
+        if self.out_filtered_pc_path is None or self.out_surface_corners_path is None or self.out_raster_paths is None:
+            raise Exception("One or more out paths not specified")
         containers_json = {}
         for cluster_id in self.cluster_planes:
             containers_json[cluster_id] = {}
