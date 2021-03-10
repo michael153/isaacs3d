@@ -66,11 +66,13 @@ class WaypointServerInterface:
             satellite_point = {}
             satellite_point['latitude'], satellite_point['longitude'], satellite_point['altitude'] = point  
             satellite_points.append(satellite_point)
+        
         request = roslibpy.ServiceRequest({'id': drone_id, 'waypoints': satellite_points})
         print("Sending request drone...")
         result = service.call(request)
         print(f"Service response: {result}")
         return result
+
 
 if __name__ == "__main__":
     drone_name = 'test_drone'
