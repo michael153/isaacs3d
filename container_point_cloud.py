@@ -115,6 +115,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
                 container = Container(container_id, color_map[container_id])
                 container.set_surfaces(surfaces)
                 container.set_container_obb(cluster_obb)
+                container.filter_surfaces()
                 self.containers.append(container)
             else:
                 self.non_container_ids.extend(point_indices)

@@ -10,13 +10,15 @@ import numpy as np
 import open3d as o3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
+from scipy.spatial.distance import cosine, directed_hausdorff
 
 CONTAINER_HEIGHT = 8.5 * 0.3048  # 8.5 ft to meters
 CONTAINER_EPS = 0.75  # to account for height error
 RASTER_TICK_SIZE = 0.5  # in meters
 
+
 class Surface:
-    """Defines a surface class""" 
+    """Defines a surface class"""
 
     def __init__(self, uid=None):
         self.uid = uid
@@ -41,8 +43,9 @@ class Surface:
         """Sets the 4 corner points of this surface."""
         self.corners = corners
 
+
 class Container:
-    """Defines a container class""" 
+    """Defines a container class"""
 
     def __init__(self, uid=None, color=None):
         self.uid = uid
@@ -58,9 +61,28 @@ class Container:
         """Sets the container's 3D bounding box."""
         self.container_obb = obb
 
-    def filter_surfaces(self):
-        """Remove duplicate surfaces"""
-        pass
+    def filter_surfaces(self, hausdorff_rel_thresh=0.2, cos_thresh=0.01):
+        """Remove duplicate surfaces using Hausdorff distances of the two surface points
+        and cosine similarity of the normals. """
+        blacklisted_indices = []
+        for i in range(len(self.surfaces)):
+            surf_a = self.surfaces[i]
+            for j in range(i + 1, len(self.surfaces)):
+                surf_b = self.surfaces[j]
+                max_dist = 1
+                for pt_a in surf_a.points[::50]:
+                    for pt_b in surf_b.points[::50]:
+                        max_dist = max(max_dist, np.linalg.norm(pt_a - pt_b))
+                cosine_dist = cosine(surf_a.normal, surf_b.normal)
+                hausdorff_dist, _, _ = directed_hausdorff(
+                    surf_a.points, surf_b.points)
+                if cosine_dist < cos_thresh and hausdorff_dist / max_dist < hausdorff_rel_thresh:
+                    blacklisted_indices.append(
+                        i if len(surf_a.points) < len(surf_b.points) else j)
+        self.surfaces = [
+            x for (i, x) in enumerate(self.surfaces)
+            if i not in blacklisted_indices
+        ]
 
 
 def get_color_palette(num_colors=20):
@@ -73,8 +95,8 @@ def get_color_palette(num_colors=20):
 def get_plane_points(pcd, dist=0.05, ransac_n=30, num_iters=500, verbose=False):
     """Extract plane with largest support in point cloud"""
     normal, inlier_indices = pcd.segment_plane(distance_threshold=dist,
-                                        ransac_n=ransac_n,
-                                        num_iterations=num_iters)
+                                               ransac_n=ransac_n,
+                                               num_iterations=num_iters)
     if verbose:
         [a, b, c, d] = normal  # pylint: disable=invalid-name
         print(f"Plane equation: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0")
@@ -117,9 +139,9 @@ def get_container_metadata(  # pylint: disable=too-many-arguments
     cluster_obb = np.asarray(
         cluster_obb.create_from_points(cluster_pcd.points).get_box_points())
     plane_normal, inlier_indices = get_plane_points(cluster_pcd,
-                                            dist=dist,
-                                            ransac_n=ransac_n,
-                                            num_iters=num_iters)
+                                                    dist=dist,
+                                                    ransac_n=ransac_n,
+                                                    num_iters=num_iters)
     surface_id = 0
     surfaces = []
 
@@ -135,9 +157,9 @@ def get_container_metadata(  # pylint: disable=too-many-arguments
         if len(cluster_pcd.points) < min_points:
             break
         plane_normal, inlier_indices = get_plane_points(cluster_pcd,
-                                                dist=dist,
-                                                ransac_n=ransac_n,
-                                                num_iters=num_iters)
+                                                        dist=dist,
+                                                        ransac_n=ransac_n,
+                                                        num_iters=num_iters)
 
     is_container = (len(surfaces) >= min_num_planes)
     return is_container, surfaces, cluster_obb
@@ -237,15 +259,32 @@ def plot_container_surfaces(containers):
         for surface_id in range(len(container.surfaces)):
             points = container.surfaces[surface_id].points
             normal = container.surfaces[surface_id].normal
-            ax.scatter(points[:, 0], points[:, 1], points[:, 2], alpha=0.1, color=color)
+            ax.scatter(points[:, 0],
+                       points[:, 1],
+                       points[:, 2],
+                       alpha=0.1,
+                       color=color)
             mean = np.mean(points, axis=0)
-            ax.quiver(mean[0], mean[1], mean[2],
-                      normal[0], normal[1], normal[2],
-                      length=5, color='black')
-            topdown_ax.scatter(points[:, 0], points[:, 1], points[:, 2], alpha=0.1)
-            topdown_ax.quiver(mean[0], mean[1], mean[2],
-                              normal[0], normal[1], normal[2],
-                              length=5, color='black')
+            ax.quiver(mean[0],
+                      mean[1],
+                      mean[2],
+                      normal[0],
+                      normal[1],
+                      normal[2],
+                      length=5,
+                      color='black')
+            topdown_ax.scatter(points[:, 0],
+                               points[:, 1],
+                               points[:, 2],
+                               alpha=0.1)
+            topdown_ax.quiver(mean[0],
+                              mean[1],
+                              mean[2],
+                              normal[0],
+                              normal[1],
+                              normal[2],
+                              length=5,
+                              color='black')
 
     ax.set_zlim(-2, 10)
     topdown_ax.view_init(azim=0, elev=90)
@@ -362,6 +401,7 @@ def intersects_container(o, d, max_t, containers):
                 if t < max_t and t > 0:
                     return True
     return False
+
 
 def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     final_connections = []
