@@ -256,7 +256,17 @@ def graph_surface_containers(containers):
     axs[1].view_init(azim=0, elev=90)
     plt.show()
 
+"""
+Creates path between different faces
 
+Parameters:
+raster_paths - a list of raster paths per face
+
+Returns:
+tour - a permutation of numbers between 0 and num_faces - 1
+avg_pts - the average point of the raster path of each face
+connections - a list of tuples with each tuple being one connection
+"""
 def connect_faces(raster_paths):
     # Find how to optimally connect each raster path
     avg_pts = []
@@ -290,6 +300,17 @@ def connect_faces(raster_paths):
     return (tour, avg_pts, connections)
 
 
+"""
+Makes connections between different faces by finding the closest point to the next face
+
+Parameters:
+tour - permutation of faces
+avg_pts - the avg_pt of each face
+raster_paths - full raster paths (all points on that face) 
+
+Returns:
+connections - list of connections (list of tuples with (first point,second point))
+"""
 def make_connections(tour, avg_pts, raster_paths):
     num_pts = len(avg_pts)
     connections = []
@@ -320,7 +341,15 @@ def make_connections(tour, avg_pts, raster_paths):
         connections.append([first_p, second_p])
     return connections
 
+"""
+Tests for intersection between a ray and any container in the scene
+Parameters: o - origin of ray, numpy array
+d - direction of ray, numpy array
+max_t - max value of t for p = o + td
+containers - a list of containers
 
+Returns: bool - whether or not a ray intersects any container
+"""
 def intersects_container(o, d, max_t, containers):
     for container_id in range(len(containers)):
         container = containers[container_id]
@@ -337,7 +366,15 @@ def intersects_container(o, d, max_t, containers):
                     return True
     return False
 
+"""
+Finds an approximate solution to a TSP problem to find a path between all connections
+given an initial solution (tour)
 
+Parameters: tour - an ordering of points (i.e. a permutation of the numbers between 0 and len(avg_pts)-1)
+avg_pts - the points to connect
+connections - a list of tuples laid out as (first point, second point)
+cpc - list of containers
+"""
 def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     final_connections = []
     for index, connect in enumerate(connections):
