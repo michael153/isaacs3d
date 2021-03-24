@@ -1,12 +1,18 @@
 """Extract containers from point cloud and calculate surface corners of each container face"""
 
+import argparse
 import os
 import extraction_utils
 from container_point_cloud import ContainerPointCloud
 
-
 def main():
     """Main method."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="print outputs of point cloud processing", action="store_true")
+    parser.add_argument("-g", "--graph", help="output graphs to visualize point cloud processing", action="store_true")
+    args = parser.parse_args()
+
     search_directory = "../"
 
     in_pc_path = os.path.join(search_directory,
@@ -16,7 +22,7 @@ def main():
                                             "surface_corners.pkl")
     out_raster_paths = os.path.join(search_directory, "raster_paths.pkl")
 
-    cpc = ContainerPointCloud(verbose=True)
+    cpc = ContainerPointCloud(verbose=args.verbose)
 
     cpc.set_out_paths(out_filtered_pc_path, out_surface_corners_path,
                       out_raster_paths)
@@ -34,9 +40,10 @@ def main():
         tour, avg_pts, cpc.raster_paths, connections,
         cpc.containers)
 
-    extraction_utils.plot_container_surfaces(cpc.containers)
-    extraction_utils.graph_surface_containers(cpc.containers)
-    extraction_utils.plot_raster_paths(cpc.raster_paths)
+    if args.graph:
+        extraction_utils.plot_container_surfaces(cpc.containers)
+        extraction_utils.graph_surface_containers(cpc.containers)
+        extraction_utils.plot_raster_paths(cpc.raster_paths)
 
     print()
     print(final_connections)

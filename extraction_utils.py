@@ -10,79 +10,13 @@ import numpy as np
 import open3d as o3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
-from scipy.spatial.distance import cosine, directed_hausdorff
+
+from surface import Surface
+from container import Container
 
 CONTAINER_HEIGHT = 8.5 * 0.3048  # 8.5 ft to meters
 CONTAINER_EPS = 0.75  # to account for height error
 RASTER_TICK_SIZE = 0.5  # in meters
-
-
-class Surface:
-    """Defines a surface class"""
-
-    def __init__(self, uid=None):
-        self.uid = uid
-        self.points = None
-        self.normal = None
-        self.corners = None
-        self.obb = None
-
-    def set_normal(self, normal):
-        """Set the normal of this surface."""
-        self.normal = normal
-
-    def set_points(self, points):
-        """Sets the points that make up this surface."""
-        self.points = points
-
-    def set_obb(self, obb):
-        """Sets the 3D bounding box of this surface."""
-        self.obb = obb
-
-    def set_corners(self, corners):
-        """Sets the 4 corner points of this surface."""
-        self.corners = corners
-
-
-class Container:
-    """Defines a container class"""
-
-    def __init__(self, uid=None, color=None):
-        self.uid = uid
-        self.color = color
-        self.surfaces = []
-        self.container_obb = None
-
-    def set_surfaces(self, surfaces):
-        """Sets the surfaces of this container."""
-        self.surfaces = surfaces
-
-    def set_container_obb(self, obb):
-        """Sets the container's 3D bounding box."""
-        self.container_obb = obb
-
-    def filter_surfaces(self, hausdorff_rel_thresh=0.2, cos_thresh=0.01):
-        """Remove duplicate surfaces using Hausdorff distances of the two surface points
-        and cosine similarity of the normals. """
-        blacklisted_indices = []
-        for i in range(len(self.surfaces)):
-            surf_a = self.surfaces[i]
-            for j in range(i + 1, len(self.surfaces)):
-                surf_b = self.surfaces[j]
-                max_dist = 1
-                for pt_a in surf_a.points[::50]:
-                    for pt_b in surf_b.points[::50]:
-                        max_dist = max(max_dist, np.linalg.norm(pt_a - pt_b))
-                cosine_dist = cosine(surf_a.normal, surf_b.normal)
-                hausdorff_dist, _, _ = directed_hausdorff(
-                    surf_a.points, surf_b.points)
-                if cosine_dist < cos_thresh and hausdorff_dist / max_dist < hausdorff_rel_thresh:
-                    blacklisted_indices.append(
-                        i if len(surf_a.points) < len(surf_b.points) else j)
-        self.surfaces = [
-            x for (i, x) in enumerate(self.surfaces)
-            if i not in blacklisted_indices
-        ]
 
 
 def get_color_palette(num_colors=20):
@@ -149,6 +83,7 @@ def get_container_metadata(  # pylint: disable=too-many-arguments
         surface = Surface(surface_id)
         surface.set_normal(plane_normal)
         surface.set_points(np.asarray(cluster_pcd.points)[inlier_indices])
+        # surface.remove_surface_outliers()
         surfaces.append(surface)
         surface_id += 1
 
@@ -429,7 +364,7 @@ def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     return final_connections
 
 
-def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
+def rasterize_container_face(corner_points, plane_normal, offset=0.3):  # pylint: disable=too-many-locals
     """Constructs a raster path off a container face. The input corner points are
     in CCW order.
     """
@@ -511,7 +446,7 @@ def rasterize_container_face(corner_points):  # pylint: disable=too-many-locals
             if n_tick_id == points_per_rail_normal - 1:
                 running_mag_rail_normal += rail_normal_remainder
 
-            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir)
+            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir + offset*plane_normal)
             running_mag_rail_normal += RASTER_TICK_SIZE
 
         # Reverse every other path segment to form raster path

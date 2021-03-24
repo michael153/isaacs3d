@@ -116,6 +116,8 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
                 container.set_surfaces(surfaces)
                 container.set_container_obb(cluster_obb)
                 container.filter_surfaces()
+                container.remove_noncontiguous_surface()
+                container.remove_interior_points()
                 self.containers.append(container)
             else:
                 self.non_container_ids.extend(point_indices)
@@ -139,7 +141,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
             for surface_id in range(len(self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
                 self.raster_paths.append(
-                    extraction_utils.rasterize_container_face(surface.corners))
+                    extraction_utils.rasterize_container_face(surface.corners, surface.normal))
 
     def write(self):
         """Writes the filtered point cloud, container surface corner points, and raster paths
