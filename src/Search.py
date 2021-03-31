@@ -4,6 +4,8 @@ from GridMap2D import GridMap2D
 from GridMap2_5D import GridMap2_5D
 from Drone import Drone
 from Flight import Flight
+from waypoint_server_interface import WaypointServerInterface
+import extraction_utils
 import sys
 import math
 import argparse
@@ -27,7 +29,7 @@ class Search:
 	def __init__(self):
 		self._initialized = False
 
-	def Initialize(self, gridx, gridy, gridz, resx, resy, resz, sources, back_min, back_max, rad_min, rad_max, dimensions, verbose, emissions=None): 
+	def Initialize(self, gridx, gridy, gridz, resx, resy, resz, sources, back_min, back_max, rad_min, rad_max, dimensions, cloud_file, verbose, emissions=None): 
 		self.name = rospy.get_name() + "/search_node"
 		self.tau = 1
 		self.background_min = back_min
@@ -43,7 +45,7 @@ class Search:
 		elif dimensions == 3:
 			pkg_path = rospack.get_path('crazyflie_isaacs_radsearch')
 #			print(pkg_path)
-			self.grid_map = GridMap2_5D(sources, pkg_path+"/src/test_env.txt")
+			self.grid_map = GridMap2_5D(sources, cloud_file)
 			self.search = Adasearch2_5D(0, sources, back_min, back_max, rad_min, rad_max, self.grid_map)
 		else:
 			raise Exception("Invalid number of dimensions. Should be 2 or 3.")

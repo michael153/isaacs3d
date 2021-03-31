@@ -53,7 +53,7 @@ class Adasearch2_5D(SearchAlgorithm):
         all_cells = self.grid_map.all_cells()
         H = np.zeros(self.num_cells)
         for i in range(0, self.num_cells):
-            H[i] = self.grid_map.h(all_cells[i].get_pos(), drone_location)
+            H[i] = self.grid_map.h(self.gridmap.get_position(i), drone_location)
         self.i += H * measurement / (measurement + 10.0)
         self.I += np.outer(H, H) / (measurement + 10.0)
         #Compute the new mean values using least squares
@@ -65,10 +65,10 @@ class Adasearch2_5D(SearchAlgorithm):
         #Compute lower and upper bounds
         lcb = mean - self.num_stddevs * std_dev
         ucb = mean + self.num_stddevs * std_dev
-        for i in range(0, self.num_cells):
-            cell = all_cells[i]
-            cb = ConfidenceBound(lcb[i], ucb[i])
-            cell.set_confidence_bounds(cb)
+        #for i in range(0, self.num_cells):
+        #    cell = all_cells[i]
+        #    cb = ConfidenceBound(lcb[i], ucb[i])
+        #    cell.set_confidence_bounds(cb)
         return (mean, lcb, ucb)
 
     """
