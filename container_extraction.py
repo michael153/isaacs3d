@@ -17,21 +17,13 @@ def main():
 
     in_pc_path = os.path.join(search_directory,
                               "25d_051_2020_11_25_18_54_50_cleaned.ply")
-    out_filtered_pc_path = os.path.join(search_directory, "filtered_pc.ply")
-    out_surface_corners_path = os.path.join(search_directory,
-                                            "surface_corners.pkl")
-    out_raster_paths = os.path.join(search_directory, "raster_paths.pkl")
 
     cpc = ContainerPointCloud(verbose=args.verbose)
-
-    cpc.set_out_paths(out_filtered_pc_path, out_surface_corners_path,
-                      out_raster_paths)
     cpc.read_pcd(in_pc_path)
     cpc.remove_ground_points()
     cpc.cluster_entities()
     cpc.identify_containers()
     cpc.rasterize_surfaces()
-    cpc.write()
 
     tour, avg_pts, connections = extraction_utils.connect_faces(
         cpc.raster_paths)

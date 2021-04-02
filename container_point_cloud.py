@@ -18,9 +18,6 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     def __init__(self, verbose=True):
         self.verbose = verbose
         self.pcd = None
-        self.filtered_file = None
-        self.surfaces_file = None
-        self.rasters_file = None
         self.noise_points = None
         self.ground_normal = None
         self.groundless_pcd = None
@@ -44,11 +41,6 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         if self.verbose:
             print(self.pcd.points)
 
-    def set_out_paths(self, filtered_file, surfaces_file, rasters_file):
-        """Sets the filepaths to save all relevant processed point cloud data."""
-        self.filtered_file = filtered_file
-        self.surfaces_file = surfaces_file
-        self.rasters_file = rasters_file
 
     def remove_ground_points(self):
         """Identifies and removes ground points from point cloud"""
@@ -144,24 +136,3 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
                 surface = self.containers[container_id].surfaces[surface_id]
                 self.raster_paths.append(
                     extraction_utils.rasterize_container_face(surface))
-
-    def write(self):
-        """Writes the filtered point cloud, container surface corner points, and raster paths
-        to their respective appropriate file paths"""
-        if self.filtered_file is None or self.surfaces_file is None or self.rasters_file is None:
-            raise Exception("One or more out paths not specified")
-
-        containers_json = {}
-        for container_id in range(len(self.containers)):
-            container = self.containers[container_id]
-            containers_json[container.uid] = {}
-            for surface_id in range(len(container.surfaces)):
-                surface = self.containers[container_id].surfaces[surface_id]
-                containers_json[container.uid][surface.uid] = surface.corners.tolist()
-
-
-        with open(self.surfaces_file, 'wb') as fout:
-            pickle.dump(containers_json, fout)
-        with open(self.rasters_file, 'wb') as fout:
-            pickle.dump(self.raster_paths, fout)
-        o3d.io.write_point_cloud(self.filtered_file, self.groundless_pcd)
