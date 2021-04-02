@@ -43,7 +43,7 @@ def main():
     if args.graph:
         extraction_utils.plot_container_surfaces(cpc.containers)
         extraction_utils.graph_surface_containers(cpc.containers)
-        extraction_utils.plot_raster_paths(cpc.raster_paths, cpc.containers)
+        extraction_utils.plot_raster_paths(cpc.raster_paths, None)
 
     print()
     print(final_connections)

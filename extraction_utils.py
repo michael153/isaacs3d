@@ -455,10 +455,6 @@ def plot_raster_paths(raster_paths, containers=None):
             color = container.color
             for surface_id in range(len(container.surfaces)):
                 pts = container.surfaces[surface_id].corners
-                # for dim in range(3):
-                #     sorted_pts = sorted(pts, key=lambda x: x[dim])  #pylint: disable=cell-var-from-loop
-                #     mins[dim] = min(mins[dim], sorted_pts[0][dim])
-                #     maxs[dim] = max(maxs[dim], sorted_pts[-1][dim])
                 surface = Poly3DCollection([pts], facecolor=color, alpha=.25)
                 ax.add_collection3d(surface)
     for i, raster_path in enumerate(raster_paths):
