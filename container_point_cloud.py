@@ -5,6 +5,7 @@ import time
 import numpy as np
 import open3d as o3d
 import extraction_utils
+import math_utils
 from extraction_utils import Container
 
 class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
@@ -112,7 +113,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
                       (container_id, str(is_container), len(surfaces)))
 
             if is_container:
-                container = Container(container_id, color_map[container_id])
+                container = Container(container_id, color_map[container_id], verbose=self.verbose)
                 container.set_surfaces(surfaces)
                 container.set_container_obb(cluster_obb)
                 container.filter_surfaces()
@@ -128,8 +129,9 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         for container_id in range(len(self.containers)):
             for surface_id in range(len(self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
-                corners = extraction_utils.fit_quadrilateral(surface.points, surface.normal)
+                corners = math_utils.fit_quadrilateral(surface.points, surface.normal)
                 surface.set_corners(corners)
+            self.containers[container_id].enforce_outward_normals()
 
         self.groundless_pcd = self.groundless_pcd.select_by_index(
             self.noise_points + self.non_container_ids, invert=True)
@@ -141,7 +143,7 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
             for surface_id in range(len(self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
                 self.raster_paths.append(
-                    extraction_utils.rasterize_container_face(surface.corners, surface.normal))
+                    extraction_utils.rasterize_container_face(surface))
 
     def write(self):
         """Writes the filtered point cloud, container surface corner points, and raster paths

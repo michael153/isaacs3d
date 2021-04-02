@@ -8,6 +8,7 @@ class Surface:
 
     def __init__(self, uid=None):
         self.uid = uid
+        self.midpoint = None
         self.points = None
         self.normal = None
         self.corners = None
@@ -17,9 +18,13 @@ class Surface:
         """Set the normal of this surface."""
         self.normal = normal
 
+    def compute_midpoint(self):
+        self.midpoint = np.mean(self.points, axis=0)
+
     def set_points(self, points):
         """Sets the points that make up this surface."""
         self.points = points
+        self.compute_midpoint()
 
     def set_obb(self, obb):
         """Sets the 3D bounding box of this surface."""

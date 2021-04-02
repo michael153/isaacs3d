@@ -1,7 +1,6 @@
 """Defines utility functions used for extracting containers from point clouds."""
 
 import colorsys
-import itertools
 import math
 import pickle
 import time
@@ -9,7 +8,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
 
 from surface import Surface
 from container import Container
@@ -83,7 +81,6 @@ def get_container_metadata(  # pylint: disable=too-many-arguments
         surface = Surface(surface_id)
         surface.set_normal(plane_normal)
         surface.set_points(np.asarray(cluster_pcd.points)[inlier_indices])
-        # surface.remove_surface_outliers()
         surfaces.append(surface)
         surface_id += 1
 
@@ -98,88 +95,6 @@ def get_container_metadata(  # pylint: disable=too-many-arguments
 
     is_container = (len(surfaces) >= min_num_planes)
     return is_container, surfaces, cluster_obb
-
-
-def fit_quadrilateral(points, plane_normal):  # pylint: disable=too-many-locals, too-many-statements
-    """Projects 3D surface points to 2D, finds the corner points of the 2D quadrilateral,
-    and returns thereconstructed corner points in 3D space"""
-
-    # Project points onto plane
-    plane_normal /= np.linalg.norm(plane_normal)
-    dists = np.dot(points, plane_normal)
-    normal_proj = np.zeros_like(points)
-    for i, dist in enumerate(dists):
-        normal_proj[i, :] = dist * plane_normal
-
-    proj = points - normal_proj
-    # Create arbitrary basis on plane and convert to 2D coords
-    basis = np.zeros((3, 2))
-    while True:
-        [i, j, k] = np.random.randint(len(points), size=3)
-        u = proj[j] - proj[i]  # pylint: disable=invalid-name
-        u /= np.linalg.norm(u)  # pylint: disable=invalid-name
-        v = proj[k] - proj[i]  # pylint: disable=invalid-name
-        v /= np.linalg.norm(v)  # pylint: disable=invalid-name
-        if abs(np.dot(u, v)) < 1:  # make sure u and v are not parallel
-            # Gram schmidt
-            v -= np.dot(u, v) * u  # pylint: disable=invalid-name
-            v /= np.linalg.norm(v)  # pylint: disable=invalid-name
-            basis[:, 0] = u
-            basis[:, 1] = v
-            break
-    coords = np.linalg.lstsq(basis, proj.T)[0].T  #(n x 2)
-    mean = np.mean(coords, axis=0)
-    coords -= mean
-
-    # Calculate principle axes to somewhat unskew quadrilateral
-    coords_x = coords[:, 0]
-    coords_y = coords[:, 1]
-    cov = np.cov(np.vstack((coords_x, coords_y)))
-    _, evec = np.linalg.eig(cov)
-    evec = evec.T
-    rotated_coords = evec @ coords.T  #(2xn)
-
-    # Calculate convex hull of rotated points, giving CCW hull points that can be
-    # used to find area
-    rotated_hull = ConvexHull(rotated_coords.T)
-    rotated_hull_points = rotated_coords.T[rotated_hull.vertices]
-
-    # Find the four convex hull points that encapsulate the largest area
-    best_area = 0
-    best_combination = None
-    all_idxs = range(len(rotated_hull_points))
-    for permutation in set(itertools.combinations(all_idxs, 4)):
-        idxs = list(permutation)
-        ccw_points = rotated_hull_points[idxs]
-        ccw_x = ccw_points[:, 0]
-        ccw_y = ccw_points[:, 1]
-        # Use shoelace theorem
-        area = 0.5 * np.abs(
-            np.dot(ccw_x, np.roll(ccw_y, 1)) - np.dot(ccw_y, np.roll(ccw_x, 1)))
-        if area > best_area:
-            best_area = area
-            best_combination = idxs
-
-    rotated_hull_corners = rotated_hull_points[best_combination]
-    hull_points = (evec.T @ rotated_hull_points.T).T  #(n x 2)
-    hull_corners = (evec.T @ rotated_hull_corners.T).T  #(n x 2)
-
-    # Remean points
-    hull_points += mean
-    hull_corners += mean
-    coords += mean
-
-    hull_normal_proj = normal_proj[rotated_hull.vertices]
-    hull_corners_proj = normal_proj[rotated_hull.vertices][best_combination]
-
-    # Unproject
-    hull_3d = np.matmul(basis, hull_points.T).T  #(n x 3)
-    hull_corners_3d = np.matmul(basis, hull_corners.T).T  #(n x 3)
-
-    hull_3d += (hull_normal_proj)
-    hull_corners_3d += (hull_corners_proj)
-
-    return hull_corners_3d
 
 
 def plot_container_surfaces(containers):
@@ -401,17 +316,23 @@ def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     return final_connections
 
 
-def rasterize_container_face(corner_points, plane_normal, offset=0.3):  # pylint: disable=too-many-locals
-    """Constructs a raster path off a container face. The input corner points are
-    in CCW order.
+def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disable=too-many-locals
+    """Constructs a raster path off a container face.
+
+    Raster paths are constructed using "rails". Rails are two parallel edges of the container
+    going in the same direction. Corresponding tickpoints will be uniformly spaced along these
+    lines. A line segment normal to the rail will then be drawn through the tickpoints, and
+    interior raster points will be extracted from these lines.
+
+    Arguments:
+        surface (Surface class): The surface object to rasterize.
     """
-    # Rails are two parallel edges of the container going in the same direction.
-    # Corresponding tickpoints will be uniformly spaced along these lines. A line
-    # segment normal to the rail will then be drawn through the tickpoints, and
-    # interior raster points will be extracted from these lines
-    corner_points = np.array(corner_points)
-    rails = [(corner_points[0], corner_points[1]),
-             (corner_points[3], corner_points[2])]
+    
+    # Shift corner points inwards slightly to prevent redudant edge points / surface collisions
+    shifted_corner_points = alpha*surface.corners + (1-alpha)*surface.midpoint
+
+    rails = [(shifted_corner_points[0], shifted_corner_points[1]),
+             (shifted_corner_points[3], shifted_corner_points[2])]
 
     get_dist = lambda u, v: np.sqrt((u[2] - v[2])**2 + (u[1] - v[1])**2 +
                                     (u[0] - v[0])**2)
@@ -483,7 +404,7 @@ def rasterize_container_face(corner_points, plane_normal, offset=0.3):  # pylint
             if n_tick_id == points_per_rail_normal - 1:
                 running_mag_rail_normal += rail_normal_remainder
 
-            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir + offset*plane_normal)
+            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir + offset*surface.normal)
             running_mag_rail_normal += RASTER_TICK_SIZE
 
         # Reverse every other path segment to form raster path
@@ -493,11 +414,53 @@ def rasterize_container_face(corner_points, plane_normal, offset=0.3):  # pylint
         raster_points.extend(path_segment)
     return raster_points
 
+def graph_surface_containers(containers):
+    """Graph container and container surface OBBs"""
+    fig = plt.figure(figsize=(10, 6))
+    axs = [fig.add_subplot(1, 2, (i + 1), projection='3d') for i in range(2)]
 
-def plot_raster_paths(raster_paths):
+    mins = [1e9, 1e9, 1e9]
+    maxs = [-1e9, -1e9, -1e9]
+
+    for container_id in range(len(containers)):
+        container = containers[container_id]
+        color = container.color
+        for surface_id in range(len(container.surfaces)):
+            pts = container.surfaces[surface_id].corners
+            for dim in range(3):
+                sorted_pts = sorted(pts, key=lambda x: x[dim])  #pylint: disable=cell-var-from-loop
+                mins[dim] = min(mins[dim], sorted_pts[0][dim])
+                maxs[dim] = max(maxs[dim], sorted_pts[-1][dim])
+            for i in range(2):
+                surface = Poly3DCollection([pts], facecolor=color, alpha=.25)
+                axs[i].add_collection3d(surface)
+
+    offset = 1
+    for i in range(2):
+        axs[i].set_xlim(mins[0] - offset, maxs[0] + offset)
+        axs[i].set_ylim(mins[1] - offset, maxs[1] + offset)
+        axs[i].set_zlim(mins[2] - offset, 15)
+
+    axs[1].view_init(azim=0, elev=90)
+    plt.show()
+
+
+def plot_raster_paths(raster_paths, containers=None):
     """Plot surface raster paths"""
     fig = plt.figure()
     ax = fig.gca(projection='3d')
+    if containers:
+        for container_id in range(len(containers)):
+            container = containers[container_id]
+            color = container.color
+            for surface_id in range(len(container.surfaces)):
+                pts = container.surfaces[surface_id].corners
+                # for dim in range(3):
+                #     sorted_pts = sorted(pts, key=lambda x: x[dim])  #pylint: disable=cell-var-from-loop
+                #     mins[dim] = min(mins[dim], sorted_pts[0][dim])
+                #     maxs[dim] = max(maxs[dim], sorted_pts[-1][dim])
+                surface = Poly3DCollection([pts], facecolor=color, alpha=.25)
+                ax.add_collection3d(surface)
     for i, raster_path in enumerate(raster_paths):
         cur_direction = None
         cur_norm = None

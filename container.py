@@ -5,15 +5,38 @@ from scipy.spatial import Delaunay  # pylint: disable=no-name-in-module
 from scipy.spatial.distance import cosine, directed_hausdorff, cdist
 from sklearn.cluster import DBSCAN
 
+import math_utils
+
+
+def surface_contains_points(points, corners_2d):
+    """Split 4 2D corner points into two triangles and check if
+    origin is in either triangle.
+
+    Arguments:
+        points (np.ndarray): 2D points array of shape (n, 2). The points
+            to be checked.
+        corners_2d (np.ndarray): 4 2D points that define the corners of the
+            surface.
+    """
+    dists = [(np.linalg.norm(corners_2d[3] - corners_2d[i]), i) for i in range(3)]
+    dists = sorted(dists, key = lambda d: d[0])
+    tri1 = corners_2d[:3]
+    tri2 = corners_2d[[dists[0][1], dists[1][1], 3]]
+    for i in range(points.shape[0]):
+        if math_utils.point_in_triangle(points[i, :], tri1) or math_utils.point_in_triangle(points[i, :], tri2):
+            return True
+    return False
+
 
 class Container:
     """Defines a container class"""
 
-    def __init__(self, uid=None, color=None):
+    def __init__(self, uid=None, color=None, verbose=False):
         self.uid = uid
         self.color = color
         self.surfaces = []
         self.container_obb = None
+        self.verbose = verbose
 
     def set_surfaces(self, surfaces):
         """Sets the surfaces of this container."""
@@ -58,7 +81,54 @@ class Container:
             if i not in blacklisted_indices
         ]
 
-    def remove_noncontiguous_surface(self, eps=1, min_samples=10):
+
+    def enforce_outward_normals(self, detailed=False):
+        """Fix surface normals such that they are pointing outwards from the surfaces."""
+        eps = 1e-2
+        if self.verbose:
+            print("Container %d..." % self.uid)
+        for i in range(len(self.surfaces)):
+
+            if np.random.random() < 0.5:
+                self.surfaces[i].normal *= -1
+
+            projected_surfaces = []
+            intersects = [0, 0]
+            for k in range(len(self.surfaces)):
+                # Skip self and perpendicular containers
+                if i == k: #or abs(np.dot(self.surfaces[i].normal, self.surfaces[k].normal)) < eps:
+                    continue
+
+                recentered_points = 1.2 * self.surfaces[k].corners - self.surfaces[i].midpoint
+                target_coords, _, basis, _ = math_utils.project_2d(recentered_points, self.surfaces[i].normal, demean=False)
+
+                if surface_contains_points(np.array([[0, 0]]), target_coords):
+                    sign = np.dot(self.surfaces[k].midpoint - self.surfaces[i].midpoint, self.surfaces[i].normal) < 0
+                    if self.verbose:
+                        print("Surface %d intersects with %d in the %d dir" % (i, k, sign))
+                    intersects[sign] += 1
+
+            if self.verbose:
+                print("Surface %d: %s" % (i, str(intersects)))
+            if detailed:
+                if intersects[0] % 2 == 1 and intersects[1] % 2 == 0:
+                    self.surfaces[i].normal *= -1
+                    if self.verbose:
+                        print("Reversed")
+                elif intersects[0] % 2 == 1 and intersects[1] % 2 == 1:
+                    raise Exception("Ray-tracing on surface %d gives incomprehensible results" % i)
+            else:
+                if intersects[0] > 0 and intersects[1] == 0:
+                    self.surfaces[i].normal *= -1
+                    if self.verbose:
+                        print("Reversed")
+                elif not (intersects[0] == 0 and intersects[1] >= 0) and self.verbose:
+                    print("Ray-tracing on surface %d gives incomprehensible results" % i)
+        if self.verbose:
+            print()
+
+
+    def remove_noncontiguous_surface(self, eps=0.95, min_samples=10):
         """For each surface, check if the plane is non contiguous, which may create issues
         when generating the plane corner points. Using DBSCAN to identify clusters, we
         check if surfaces are mono-clusters and if not, remove all clusters besides the
@@ -86,6 +156,8 @@ class Container:
             self.surfaces[i].points = self.surfaces[i].points[keep, :]
             if len(self.surfaces[i].points) == 0:
                 empty_surface_indices.append(i)
+            else:
+                self.surfaces[i].compute_midpoint()
         self.surfaces = [
             self.surfaces[i]
             for i in range(len(self.surfaces))
