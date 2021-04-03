@@ -1,5 +1,6 @@
 """Defines the Container Point Cloud class."""
 
+import os
 import pickle
 import time
 import numpy as np
@@ -7,6 +8,7 @@ import open3d as o3d
 import extraction_utils
 import math_utils
 from extraction_utils import Container
+
 
 class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     """Container point cloud class"""
@@ -27,12 +29,16 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         self.raster_paths = None
         self.containers = []
 
-    def read_pcd(self, in_pc_path):
+    def read_pcd(self, input_file):
         """Read PCD from a file path"""
-        self.pcd = o3d.io.read_point_cloud(in_pc_path)
+        if not os.path.exists(input_file):
+            raise Exception("Error reading point cloud data.")
+        self.pcd = o3d.io.read_point_cloud(input_file,
+                                           print_progress=self.verbose)
         self.pcd = self.pcd.voxel_down_sample(voxel_size=self.DOWNSAMPLE_SIZE)
         if self.verbose:
-            print(self.pcd.points)
+            print("Successfully read point cloud with %d points..." %
+                  len(self.pcd.points))
 
     def set_pcd(self, pcd):
         """Save a given PCD"""
@@ -40,7 +46,6 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         self.pcd = self.pcd.voxel_down_sample(voxel_size=self.DOWNSAMPLE_SIZE)
         if self.verbose:
             print(self.pcd.points)
-
 
     def remove_ground_points(self):
         """Identifies and removes ground points from point cloud"""
@@ -105,10 +110,12 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
                       (container_id, str(is_container), len(surfaces)))
 
             if is_container:
-                container = Container(container_id, color_map[container_id], verbose=self.verbose)
+                container = Container(container_id,
+                                      color_map[container_id],
+                                      verbose=self.verbose)
                 container.set_surfaces(surfaces)
                 container.set_container_obb(cluster_obb)
-                container.filter_surfaces()
+                container.filter_surfaces(ground_normal=self.ground_normal)
                 container.remove_noncontiguous_surface()
                 container.remove_interior_points()
                 self.containers.append(container)
@@ -119,9 +126,11 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
             print("Found %d containers\n" % len(self.containers))
 
         for container_id in range(len(self.containers)):
-            for surface_id in range(len(self.containers[container_id].surfaces)):
+            for surface_id in range(len(
+                    self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
-                corners = math_utils.fit_quadrilateral(surface.points, surface.normal)
+                corners = math_utils.fit_quadrilateral(surface.points,
+                                                       surface.normal)
                 surface.set_corners(corners)
             self.containers[container_id].enforce_outward_normals()
 
@@ -132,7 +141,8 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
         """Generate raster paths for each of the container surfaces."""
         self.raster_paths = []
         for container_id in range(len(self.containers)):
-            for surface_id in range(len(self.containers[container_id].surfaces)):
+            for surface_id in range(len(
+                    self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
                 self.raster_paths.append(
                     extraction_utils.rasterize_container_face(surface))
