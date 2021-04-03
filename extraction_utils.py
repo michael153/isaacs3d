@@ -171,6 +171,7 @@ def graph_surface_containers(containers):
     axs[1].view_init(azim=0, elev=90)
     plt.show()
 
+
 """
 Creates path between different faces
 
@@ -182,6 +183,8 @@ tour - a permutation of numbers between 0 and num_faces - 1
 avg_pts - the average point of the raster path of each face
 connections - a list of tuples with each tuple being one connection
 """
+
+
 def connect_faces(raster_paths):
     # Find how to optimally connect each raster path
     avg_pts = []
@@ -226,6 +229,8 @@ raster_paths - full raster paths (all points on that face)
 Returns:
 connections - list of connections (list of tuples with (first point,second point))
 """
+
+
 def make_connections(tour, avg_pts, raster_paths):
     num_pts = len(avg_pts)
     connections = []
@@ -256,6 +261,7 @@ def make_connections(tour, avg_pts, raster_paths):
         connections.append([first_p, second_p])
     return connections
 
+
 """
 Tests for intersection between a ray and any container in the scene
 Parameters: o - origin of ray, numpy array
@@ -265,6 +271,8 @@ containers - a list of containers
 
 Returns: bool - whether or not a ray intersects any container
 """
+
+
 def intersects_container(o, d, max_t, containers):
     for container_id in range(len(containers)):
         container = containers[container_id]
@@ -281,6 +289,7 @@ def intersects_container(o, d, max_t, containers):
                     return True
     return False
 
+
 """
 Finds an approximate solution to a TSP problem to find a path between all connections
 given an initial solution (tour)
@@ -290,6 +299,8 @@ avg_pts - the points to connect
 connections - a list of tuples laid out as (first point, second point)
 cpc - list of containers
 """
+
+
 def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     final_connections = []
     for index, connect in enumerate(connections):
@@ -327,9 +338,10 @@ def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disab
     Arguments:
         surface (Surface class): The surface object to rasterize.
     """
-    
+
     # Shift corner points inwards slightly to prevent redudant edge points / surface collisions
-    shifted_corner_points = alpha*surface.corners + (1-alpha)*surface.midpoint
+    shifted_corner_points = alpha * surface.corners + (1 -
+                                                       alpha) * surface.midpoint
 
     rails = [(shifted_corner_points[0], shifted_corner_points[1]),
              (shifted_corner_points[3], shifted_corner_points[2])]
@@ -404,7 +416,8 @@ def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disab
             if n_tick_id == points_per_rail_normal - 1:
                 running_mag_rail_normal += rail_normal_remainder
 
-            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir + offset*surface.normal)
+            path_segment.append(pt_r1 + running_mag_rail_normal * norm_dir +
+                                offset * surface.normal)
             running_mag_rail_normal += RASTER_TICK_SIZE
 
         # Reverse every other path segment to form raster path
@@ -413,6 +426,7 @@ def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disab
             path_segment = path_segment[::-1]
         raster_points.extend(path_segment)
     return raster_points
+
 
 def graph_surface_containers(containers):
     """Graph container and container surface OBBs"""
