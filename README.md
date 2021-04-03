@@ -29,7 +29,7 @@ The actual radiation source detection given the data collected over the raster p
 ```pip3 install -r requirements.txt```
 
 #### 2. Set file paths
-You can set the path to the input point cloud file (must be a .ply file) and the path to the output waypoints path by running
+You can set the path to the input point cloud file (must be a .ply file) and the path to the output waypoints path (must be a .pkl file) by running
 ```python3 set_paths.py -in [path to point cloud file] -out [path to output waypoints path]```
 
 ### Running the path planner
