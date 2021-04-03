@@ -1,12 +1,15 @@
-# ISAACS 2.5D Research Project
+# ISAACS 2.5D / 3D Research Project
 
 ## Overview
 
-This project plans drone missions by computing the waypoints necessary for radiation source detection among shipping containers
-in a previously unseen environment. The waypoints are computed by generating raster paths over the shipping containers' surfaces, which are algorithmically computed from the drone's sensory point cloud data. 
+### Problem Overview
+The ISAACS 2.5D / 3D project's goal is to autonomously detect radiation sources within shipping containers, which is a necessary step in effectively screening international container traffic and regulating trade.
 
-The actual radiation source detection given the data collected over the raster paths is implemented separately and follows the implementation described in
-[A Successive-Elimination Approach to Adaptive Robotic Sensing](https://arxiv.org/abs/1809.10611).
+To find the radiation source(s), an autonomous drone is flown along the mission's waypoint path to collect radiation data. The drone then iteratively rules out potential source locations by using the AdaSearch algorithm, which is described in more detail in [A Successive-Elimination Approach to Adaptive Robotic Sensing](https://arxiv.org/abs/1809.10611). 
+
+This repository contains code to plan the waypoint path when given the environment's point cloud data (which is gathered upstream by the drone). The waypoints are algorithmically computed by generating raster paths over the surfaces of every shipping container found within the point cloud. 
+
+### Example Images
 
 <p align="center">
   <img src="images/example_pointcloud_data.png" width="785" alt="">
