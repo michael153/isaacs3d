@@ -5,10 +5,11 @@ import numpy as np
 from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
 
 
-def point_in_triangle (point, triangle):
+def point_in_triangle(point, triangle):
     """Check if a point is within a triangle."""
     v1, v2, v3 = triangle
-    sign = lambda p1, p2, p3: (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+    sign = lambda p1, p2, p3: (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[
+        0]) * (p1[1] - p3[1])
     d1 = sign(point, v1, v2)
     d2 = sign(point, v2, v3)
     d3 = sign(point, v3, v1)
@@ -41,11 +42,19 @@ def project_2d(points_3d, normal, demean=True, use_basis=None):
         # Create arbitrary basis on plane and convert to 2D coords
         while True:
             indices = np.random.randint(len(points_3d), size=3)
-            basis = [proj[indices[1]] - proj[indices[0]],
-                     proj[indices[2]] - proj[indices[0]]]
+            basis = [
+                proj[indices[1]] - proj[indices[0]],
+                proj[indices[2]] - proj[indices[0]]
+            ]
 
-            basis[0] /= np.linalg.norm(basis[0])
-            basis[1] /= np.linalg.norm(basis[1])
+            norms = [np.linalg.norm(basis[0]), np.linalg.norm(basis[1])]
+
+            if not (np.isfinite(norms[0]) and np.isfinite(norms[1]) and
+                    norms[0] > 0 and norms[1] > 0):
+                continue
+
+            basis[0] /= norms[0]
+            basis[1] /= norms[1]
 
             if abs(np.dot(basis[0], basis[1])) < 1:
                 basis[1] -= np.dot(basis[0], basis[1]) * basis[0]
@@ -55,7 +64,7 @@ def project_2d(points_3d, normal, demean=True, use_basis=None):
                 basis = np.hstack(basis)
                 break
 
-    coords = np.linalg.lstsq(basis, proj.T)[0].T  #(n x 2)
+    coords = np.linalg.lstsq(basis, proj.T, rcond=-1)[0].T  #(n x 2)
     mean = np.mean(coords, axis=0)
     if demean:
         coords -= mean
@@ -67,7 +76,9 @@ def fit_quadrilateral(points, plane_normal):  # pylint: disable=too-many-locals,
     and returns thereconstructed corner points in 3D space"""
 
     # Project points onto plane
-    coords, normal_proj, basis, mean = project_2d(points, plane_normal, demean=True)
+    coords, normal_proj, basis, mean = project_2d(points,
+                                                  plane_normal,
+                                                  demean=True)
 
     # Calculate principle axes to somewhat unskew quadrilateral
     coords_x = coords[:, 0]
