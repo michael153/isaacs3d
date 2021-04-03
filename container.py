@@ -9,8 +9,10 @@ import math_utils
 
 
 def surface_contains_points(points, corners_2d):
-    """Split 4 2D corner points into two triangles and check if
-    origin is in either triangle.
+    """Check if the points are contained within the 2D corners coordinates.
+    
+    This method splits the 4 2D corner points into two triangles and checks if the points
+    are in either triangle.
 
     Arguments:
         points (np.ndarray): 2D points array of shape (n, 2). The points
@@ -18,12 +20,16 @@ def surface_contains_points(points, corners_2d):
         corners_2d (np.ndarray): 4 2D points that define the corners of the
             surface.
     """
-    dists = [(np.linalg.norm(corners_2d[3] - corners_2d[i]), i) for i in range(3)]
-    dists = sorted(dists, key = lambda d: d[0])
+    dists = [
+        (np.linalg.norm(corners_2d[3] - corners_2d[i]), i) for i in range(3)
+    ]
+    dists = sorted(dists, key=lambda d: d[0])
     tri1 = corners_2d[:3]
     tri2 = corners_2d[[dists[0][1], dists[1][1], 3]]
     for i in range(points.shape[0]):
-        if math_utils.point_in_triangle(points[i, :], tri1) or math_utils.point_in_triangle(points[i, :], tri2):
+        if math_utils.point_in_triangle(points[i, :],
+                                        tri1) or math_utils.point_in_triangle(
+                                            points[i, :], tri2):
             return True
     return False
 
@@ -46,16 +52,32 @@ class Container:
         """Sets the container's 3D bounding box."""
         self.container_obb = obb
 
-    def filter_surfaces( # pylint: disable=too-many-locals
+    def filter_surfaces(  # pylint: disable=too-many-locals
             self,
+            ground_normal=None,
+            ground_similarity_thresh=0.9,
             hausdorff_rel_thresh=0.2,
             cos_thresh=0.01,
             sample_size=100):
-        """Remove duplicate surfaces using Hausdorff distances of the two surface points
+        """Remove erroneous and duplicate surfaces.
+
+        This method removes both erroneous surfaces and duplicate surfaces.
+
+        Erroneous surfaces are classified as those with normals parallel to the ground.
+        Duplicate surfaces are removed using Hausdorff distances of the two surface points
         and cosine similarity of the normals. The Hausdorff distance is divided by
-        the maximum pairwise distance of sample sets of the surface points."""
+        the maximum pairwise distance of sample sets of the surface points.
+
+        Arguments:
+            ground_normal (np.ndarray or None): The ground normal.
+        """
         blacklisted_indices = []
         for i in range(len(self.surfaces)):
+            if ground_normal is not None and abs(
+                    np.dot(self.surfaces[i].normal,
+                           ground_normal)) > ground_similarity_thresh:
+                blacklisted_indices.append(i)
+                continue
             surf_a = self.surfaces[i]
             surf_a_len = len(surf_a.points)
             for j in range(i + 1, len(self.surfaces)):
@@ -81,33 +103,31 @@ class Container:
             if i not in blacklisted_indices
         ]
 
-
-    def enforce_outward_normals(self, detailed=False):
+    def enforce_outward_normals(self, detailed=False, eps=1e-2, multiplier=1.2):
         """Fix surface normals such that they are pointing outwards from the surfaces."""
-        eps = 1e-2
         if self.verbose:
             print("Container %d..." % self.uid)
         for i in range(len(self.surfaces)):
-
             if np.random.random() < 0.5:
                 self.surfaces[i].normal *= -1
-
             projected_surfaces = []
             intersects = [0, 0]
             for k in range(len(self.surfaces)):
                 # Skip self and perpendicular containers
-                if i == k: #or abs(np.dot(self.surfaces[i].normal, self.surfaces[k].normal)) < eps:
+                if i == k:
                     continue
-
-                recentered_points = 1.2 * self.surfaces[k].corners - self.surfaces[i].midpoint
-                target_coords, _, basis, _ = math_utils.project_2d(recentered_points, self.surfaces[i].normal, demean=False)
-
+                recentered_points = multiplier * self.surfaces[
+                    k].corners - self.surfaces[i].midpoint
+                target_coords, _, basis, _ = math_utils.project_2d(
+                    recentered_points, self.surfaces[i].normal, demean=False)
                 if surface_contains_points(np.array([[0, 0]]), target_coords):
-                    sign = np.dot(self.surfaces[k].midpoint - self.surfaces[i].midpoint, self.surfaces[i].normal) < 0
+                    sign = np.dot(
+                        self.surfaces[k].midpoint - self.surfaces[i].midpoint,
+                        self.surfaces[i].normal) < 0
                     if self.verbose:
-                        print("Surface %d intersects with %d in the %d dir" % (i, k, sign))
+                        print("Surface %d intersects with %d in the %d dir" %
+                              (i, k, sign))
                     intersects[sign] += 1
-
             if self.verbose:
                 print("Surface %d: %s" % (i, str(intersects)))
             if detailed:
@@ -116,17 +136,21 @@ class Container:
                     if self.verbose:
                         print("Reversed")
                 elif intersects[0] % 2 == 1 and intersects[1] % 2 == 1:
-                    raise Exception("Ray-tracing on surface %d gives incomprehensible results" % i)
+                    raise Exception(
+                        "Ray-tracing on surface %d gives incomprehensible results"
+                        % i)
             else:
                 if intersects[0] > 0 and intersects[1] == 0:
                     self.surfaces[i].normal *= -1
                     if self.verbose:
                         print("Reversed")
-                elif not (intersects[0] == 0 and intersects[1] >= 0) and self.verbose:
-                    print("Ray-tracing on surface %d gives incomprehensible results" % i)
+                elif not (intersects[0] == 0 and
+                          intersects[1] >= 0) and self.verbose:
+                    print(
+                        "Ray-tracing on surface %d gives incomprehensible results"
+                        % i)
         if self.verbose:
             print()
-
 
     def remove_noncontiguous_surface(self, eps=0.95, min_samples=10):
         """For each surface, check if the plane is non contiguous, which may create issues
