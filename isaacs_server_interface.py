@@ -153,10 +153,11 @@ def main():
     interface.start_client()
 
     topics_published = [{"name": "/lamp/data", "type": "geometry_msgs/Vector3"}]
-    drone_id = interface_utils.register_dummy_drone(interface.client, "mavros_test_drone",
+    drone_name = "mavros_test_drone"
+    drone_id = interface_utils.register_dummy_drone(interface.client, drone_name,
                                                 "Mavros", topics_published)
 
-    interface.get_drone_id(DRONE_NAME)
+    interface.get_drone_id(drone_name)
     time.sleep(5)
 
     waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6), (10, 12, 14)]
