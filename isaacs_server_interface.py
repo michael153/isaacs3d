@@ -34,7 +34,8 @@ class WaypointProgressSubscriber():
     """Class that defines a ROS listener that listens to mission progress updates."""
 
     def __init__(self, waypoint_topic, radiation_sub):
-        self.sub = rospy.Subscriber(waypoint_topic, WaypointReached, self.callback)
+        self.sub = rospy.Subscriber(waypoint_topic, WaypointReached,
+                                    self.callback)
         self.radiation_sub = radiation_sub
         self.data = {}
 
@@ -148,23 +149,26 @@ class IsaacsServerInterface:
 # http://docs.ros.org/en/api/mavros_msgs/html/msg/WaypointReached.html
 # https://github.com/immersive-command-system/drone-mavros
 
+
 def main():
     rospy.init_node("server_interface")
 
-    interface = IsaacsServerInterface(radiation_topic="/lamp/data", waypoint_topic="/mavros/mission/reached")
+    interface = IsaacsServerInterface(radiation_topic="/lamp/data",
+                                      waypoint_topic="/mavros/mission/reached")
     interface.start_client()
 
     topics_published = [{"name": "/lamp/data", "type": "geometry_msgs/Vector3"}]
     drone_name = "mavros_test_drone"
-    drone_id = interface_utils.register_dummy_drone(interface.client, drone_name,
-                                                "Mavros", topics_published)
+    drone_id = interface_utils.register_dummy_drone(interface.client,
+                                                    drone_name, "Mavros",
+                                                    topics_published)
 
     interface.get_drone_id(drone_name)
     time.sleep(5)
 
     waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6), (10, 12, 14)]
     interface.send_waypoints(waypoints)
-    
+
     # rospy.spin()
     interface.client.terminate()
 
