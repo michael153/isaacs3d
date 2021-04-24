@@ -47,51 +47,49 @@ python3 container_extraction.py [--verbose] [--graph]
 ```
 The flags specify whether you want the planner to print out debugging statements and if you want to graph the container extraction, surface reconstruction, and path generation.
 
-## End-to-end Testing with MAVROS Drone and ISAACS Server
+## End-to-end testing with MAVROS Drone and ISAACS Server
 
 ### Setup
 
 To set up the end-to-end testing framework with the ISAACS server, we must install the following dependencies. It is recommended to use either Ubuntu 16.04 or 18.04.
 
-#### 1. Set up the ISAACS server
-Follow the installation guidelines [here](https://github.com/immersive-command-system/isaacs_server)
+#### 1. Set up the ISAACS server (instructions [here](https://github.com/immersive-command-system/isaacs_server))
 
-#### 2. Set up automated onboarding, connection, and communication of the MAVROS drone with ISAACS server
-Follow the installation guidelines [here](https://github.com/immersive-command-system/drone-mavros).
+#### 2. Set up automated onboarding, connection, and communication of the MAVROS drone with ISAACS server (instructions [here](https://github.com/immersive-command-system/drone-mavros))
 
 ### Putting it all together
 
 Once everything is installed, run the following commands in sequential order.
 
-#### 1. Launch the Gazebo world
+#### 3. Launch the Gazebo world
 ```shell
 gazebo --verbose worlds/typhoon_ardupilot.world 
 ```
 
-#### 2. Start the SITL Simulation
+#### 4. Start the SITL Simulation
 In the installed `ardupilot` directory, run
 ```shell
 python3 Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris
 ```
 
-#### 3. Start the ISAACS server
+#### 5. Start the ISAACS server
 ```shell
 roslaunch rosbridge_server rosbridge_websocket.launch
 ```
 
-#### 4. Run the Operator node
+#### 6. Run the Operator node
 In the installed `isaacs_server` directory, run
 ```shell
 python3 src/operator.py --ip localhost
 ```
 
-#### 5. Launch the MAVROS drone and connect with the ISAACS server
+#### 7. Launch the MAVROS drone and connect with the ISAACS server
 In the `drone-mavros` directory, run
 ```shell
 roslaunch server_connector src/server_connector/launch/start_connection.launch server_ip:=localhost
 ```
 
-#### 6. Run AdaSearch flight algorithm
+#### 8. Run AdaSearch flight algorithm
 ```shell
 python3 isaacs_server_interface.py
 ```
