@@ -70,14 +70,12 @@ class IsaacsServerInterface:
         self.client = roslibpy.Ros(host=server_addr, port=server_port)
         self.client.run()
         print(self.client.is_connected)
-        self.mission_uploader = interface_utils.ActionClientWorkaround(
+        self.mission_uploader = roslibpy.actionlib.ActionClient(
             self.client, "isaacs_server/upload_mission",
-            'isaacs_server/UploadMission')
-        self.mission_uploader.setCustomTopics()
-        self.drone_controller = interface_utils.ActionClientWorkaround(
+            'isaacs_server/UploadMissionAction')
+        self.drone_controller = roslibpy.actionlib.ActionClient(
             self.client, "isaacs_server/control_drone",
-            'isaacs_server/ControlDrone')
-        self.drone_controller.setCustomTopics()
+            'isaacs_server/ControlDroneAction')
 
     def get_drone_id(self, drone_name):
         """Call the all_drones_available service to find the drone ID.
@@ -110,6 +108,10 @@ class IsaacsServerInterface:
                 self.drone_id = available_drones['id']
                 print("Setting drone_id to %d" % self.drone_id)
                 return
+
+    def manual_set_id(self, drone_id):
+        """Manually set drone ID."""
+        self.drone_id = drone_id
 
     def send_waypoints(self, waypoints):
         """Send waypoints to drone and upload mission."""
@@ -149,7 +151,6 @@ class IsaacsServerInterface:
 # http://docs.ros.org/en/api/mavros_msgs/html/msg/WaypointReached.html
 # https://github.com/immersive-command-system/drone-mavros
 
-
 def main():
     rospy.init_node("server_interface")
 
@@ -158,18 +159,14 @@ def main():
     interface.start_client()
 
     topics_published = [{"name": "/lamp/data", "type": "geometry_msgs/Vector3"}]
-    drone_name = "mavros_test_drone"
-    drone_id = interface_utils.register_dummy_drone(interface.client,
-                                                    drone_name, "Mavros",
-                                                    topics_published)
+    interface.get_drone_id("hexacopter")
+    interface_utils.save_topics_to_drone(interface.client, 1, topics_published)
 
-    interface.get_drone_id(drone_name)
     time.sleep(5)
 
     waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6), (10, 12, 14)]
     interface.send_waypoints(waypoints)
 
-    # rospy.spin()
     interface.client.terminate()
 
 
