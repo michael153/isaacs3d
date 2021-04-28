@@ -256,8 +256,8 @@ def make_connections(tour, avg_pts, raster_paths):
             if dist < min_dist:
                 min_index = j
                 min_dist = dist
-        first_p = (first_point, first_index)
-        second_p = (second_path[min_index], min_index)
+        first_p = first_point
+        second_p = second_path[min_index]
         connections.append([first_p, second_p])
     return connections
 
@@ -273,7 +273,7 @@ Returns: bool - whether or not a ray intersects any container
 """
 
 
-def intersects_container(o, d, max_t, containers):
+def intersects_container(origin, direction, max_t, containers):
     for container_id in range(len(containers)):
         container = containers[container_id]
         for surface_id in range(len(container.surfaces)):
@@ -281,10 +281,10 @@ def intersects_container(o, d, max_t, containers):
             A = pts[0] - pts[1]
             B = pts[2] - pts[1]
             C = pts[3]
-            N = np.cross(A, B)
-            denom = np.dot(d, N)
+            plane_normal = np.cross(A, B)
+            denom = np.dot(direction, plane_normal)
             if abs(denom) > 0.0001:
-                t = np.dot((C - o), N) / denom
+                t = np.dot((C - origin), N) / denom
                 if t < max_t and t > 0:
                     return True
     return False
@@ -304,27 +304,32 @@ cpc - list of containers
 def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     final_connections = []
     for index, connect in enumerate(connections):
-        fp, sp = connect
-        o = fp[0]
-        d = sp[0] - fp[0]
+        firstpoint, secondpoint = connect
+        origin = fp[0]
+        direction = sp[0] - fp[0]
         max_t = 1.0
         count = 0
-        while intersects_container(o, d, max_t, cpc):
+        while intersects_container(origin, direction, max_t, cpc):
             if count > 10:
                 print("failure")
                 exit()
             avg_pt = avg_pts[tour[index]]
             avg_pt2 = avg_pts[tour[(index + 1) % len(tour)]]
             if count % 2 == 0:
-                new_o = o + (o - avg_pt) * 0.1
-                o = new_o
+                new_o = origin + (origin - avg_pt) * 0.1
+                origin = new_o
             else:
-                new_d = sp[0] + (sp[0] - avg_pt2) * 0.1
-                d = new_d - o
-        first_point = (fp, o)
-        second_point = (sp, o + d)
+                new_d = secondpoint[0] + (secondpoint[0] - avg_pt2) * 0.1
+                direction = new_d - origin
+        first_point = (firstpoint, origin)
+        second_point = (secondpoint, origin + direction)
         final_connections.append([first_point, second_point])
-    return final_connections
+    final_path = []
+    for index in enumerate(final_connections):
+        final_path.extend(cpc.raster_paths[index])
+        final_path.extend(final_connections[index])
+    final_path.extend(cpc.raster_paths[len(final_connections)])
+    return final_path
 
 
 def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disable=too-many-locals
