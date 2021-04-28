@@ -109,10 +109,6 @@ class IsaacsServerInterface:
                 print("Setting drone_id to %d" % self.drone_id)
                 return
 
-    def manual_set_id(self, drone_id):
-        """Manually set drone ID."""
-        self.drone_id = drone_id
-
     def send_waypoints(self, waypoints):
         """Send waypoints to drone and upload mission."""
         if not self.drone_id:
