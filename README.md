@@ -55,9 +55,11 @@ To set up the end-to-end testing framework with the ISAACS server, we must insta
 
 1. Set up the ISAACS server 
 Instructions [here](https://github.com/immersive-command-system/isaacs_server)
+Make sure to use the `operator` branch.
 
 2. Set up automated onboarding, connection, and communication of the MAVROS drone with ISAACS server 
-Instructions [here](https://github.com/immersive-command-system/drone-mavros)
+Instructions [here](https://github.com/immersive-command-system/drone-mavros).
+Make sure to use the `server-connector` branch.
 
 ### Putting it all together
 
@@ -73,10 +75,11 @@ In the installed `ardupilot` directory, run
 ```shell
 python3 Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris
 ```
+If this is the first time running the SITL, run `param set FRAME_CLASS 2` in the `sim_vehicle` terminal.
 
 5. Start the ISAACS server
 ```shell
-roslaunch rosbridge_server rosbridge_websocket.launch
+roslaunch rosbridge_server rosbridge_websocket.launch unregister_timeout:=600
 ```
 
 6. Run the Operator node
