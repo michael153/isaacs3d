@@ -57,11 +57,16 @@ sends the waypoints to that drone."""
 class IsaacsServerInterface:
     """Connects to server, registers the drone and sends waypoints"""
 
-    def __init__(self, radiation_topic, waypoint_topic):
+    def __init__(self, radiation_topic, waypoint_topic, origin=None):
         self.drone_id = None
         self.radiation_sub = RadiationSubscriber(radiation_topic)
         self.waypoint_sub = WaypointProgressSubscriber(waypoint_topic,
                                                        self.radiation_sub)
+        self.origin = origin
+
+    def set_origin(self, origin):
+        """Set the GPS origin."""
+        self.origin = origin
 
     def start_client(self, server_addr='localhost', server_port=9090):
         """Start the Roslib client and connect to server.
@@ -75,7 +80,7 @@ class IsaacsServerInterface:
             'isaacs_server/UploadMissionAction')
         self.drone_controller = roslibpy.actionlib.ActionClient(
             self.client, "isaacs_server/control_drone",
-            'isaacs_server/ControlDroneAction')
+            '/isaacs_server/ControlDroneAction')
 
     def get_drone_id(self, drone_name):
         """Call the all_drones_available service to find the drone ID.
@@ -109,6 +114,22 @@ class IsaacsServerInterface:
                 print("Setting drone_id to %d" % self.drone_id)
                 return
 
+    def stop_mission(self):
+        """Stop running mission"""
+        if not self.drone_id:
+            raise Exception("Drone id is not set.")
+        stop_mission_goal = roslibpy.actionlib.Goal(
+            self.drone_controller,
+            roslibpy.Message({
+                'id': self.drone_id,
+                "control_task": "stop_mission"
+            }))
+        stop_mission_goal.on('feedback', lambda f: print(f['progress']))
+        stop_mission_goal.send()
+        stop_mission_result = stop_mission_goal.wait(30)
+        if not stop_mission_result["success"]:
+            raise Exception("Failure to run mission")
+
     def send_waypoints(self, waypoints):
         """Send waypoints to drone and upload mission."""
         if not self.drone_id:
@@ -118,50 +139,53 @@ class IsaacsServerInterface:
             formatted_waypoint = interface_utils.convert_to_NSF(*waypoint)
             mission.append(formatted_waypoint)
 
-        upload_goal = roslibpy.actionlib.Goal(
+        goal = roslibpy.actionlib.Goal(
             self.mission_uploader,
             roslibpy.Message({
                 'id': self.drone_id,
                 "waypoints": mission
             }))
-        upload_goal.on('feedback', lambda f: print(f['progress']))
-        upload_goal.send()
-        upload_result = upload_goal.wait(10)
-        if not upload_result["success"]:
+        goal.on('feedback', lambda f: print(f['progress']))
+        goal.send()
+        result = goal.wait(30)
+        if not result["success"]:
             raise Exception("Failure to upload mission")
 
-        run_mission_goal = roslibpy.actionlib.Goal(
+    def start_mission(self):
+        """Start drone mission."""
+        if not self.drone_id:
+            raise Exception("Drone id is not set.")
+        goal = roslibpy.actionlib.Goal(
             self.drone_controller,
             roslibpy.Message({
                 'id': self.drone_id,
                 "control_task": "start_mission"
             }))
-        run_mission_goal.on('feedback', lambda f: print(f['progress']))
-        run_mission_goal.send()
-        run_mission_result = run_mission_goal.wait(10)
-        if not run_mission_result["success"]:
+        goal.on('feedback', lambda f: print(f['progress']))
+        goal.send()
+        result = goal.wait(10)
+        if not result["success"]:
             raise Exception("Failure to run mission")
 
-
-# "/mavros/mission/reached"
-# http://docs.ros.org/en/api/mavros_msgs/html/msg/WaypointReached.html
-# https://github.com/immersive-command-system/drone-mavros
 
 def main():
     rospy.init_node("server_interface")
 
+    rsf_origin = (37.915111777, -122.33799327, 33.5)
     interface = IsaacsServerInterface(radiation_topic="/lamp/data",
-                                      waypoint_topic="/mavros/mission/reached")
+                                      waypoint_topic="/mavros/mission/reached",
+                                      origin=rsf_origin)
     interface.start_client()
 
     topics_published = [{"name": "/lamp/data", "type": "geometry_msgs/Vector3"}]
     interface.get_drone_id("hexacopter")
     interface_utils.save_topics_to_drone(interface.client, 1, topics_published)
-
     time.sleep(5)
 
     waypoints = [(1, 0, 0), (1, 2, 3), (4, 5, 6), (10, 12, 14)]
     interface.send_waypoints(waypoints)
+    time.sleep(5)
+    interface.start_mission()
 
     interface.client.terminate()
 
