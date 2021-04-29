@@ -45,13 +45,10 @@ class WaypointProgressSubscriber():
             'waypoint_id']  # needs to be updated to match codebase
         self.data[waypoint_id] = self.radiation_sub.readings
         print(
-            f"Hit waypoint {waypoint_id}, collected the corresponding readings: {self.data[waypoint_id]}"
+            f"Hit waypoint {waypoint_id}, \
+            collected the corresponding readings: {self.data[waypoint_id]}"
         )
         self.radiation_sub.clear_readings()
-
-
-"""Defines the IsaacsServerInterface class, which takes in a drone id and
-sends the waypoints to that drone."""
 
 
 class IsaacsServerInterface:
@@ -59,6 +56,9 @@ class IsaacsServerInterface:
 
     def __init__(self, radiation_topic, waypoint_topic, origin=None):
         self.drone_id = None
+        self.client = None
+        self.mission_uploader = None
+        self.drone_controller = None
         self.radiation_sub = RadiationSubscriber(radiation_topic)
         self.waypoint_sub = WaypointProgressSubscriber(waypoint_topic,
                                                        self.radiation_sub)
@@ -136,7 +136,8 @@ class IsaacsServerInterface:
             raise Exception("Drone id is not set.")
         mission = []
         for waypoint in waypoints:
-            formatted_waypoint = interface_utils.convert_to_NSF(*waypoint)
+            gps_waypoint = interface_utils.meters_to_gps(self.origin, waypoint)
+            formatted_waypoint = interface_utils.gps_to_nsf(*gps_waypoint)
             mission.append(formatted_waypoint)
 
         goal = roslibpy.actionlib.Goal(
@@ -169,6 +170,7 @@ class IsaacsServerInterface:
 
 
 def main():
+    """Main method."""
     rospy.init_node("server_interface")
 
     rsf_origin = (37.915111777, -122.33799327, 33.5)
