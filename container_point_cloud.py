@@ -140,9 +140,11 @@ class ContainerPointCloud:  # pylint: disable=too-many-instance-attributes
     def rasterize_surfaces(self):
         """Generate raster paths for each of the container surfaces."""
         self.raster_paths = []
+        self.raster_normals = []
         for container_id in range(len(self.containers)):
             for surface_id in range(len(
                     self.containers[container_id].surfaces)):
                 surface = self.containers[container_id].surfaces[surface_id]
-                self.raster_paths.append(
-                    extraction_utils.rasterize_container_face(surface))
+                r = extraction_utils.rasterize_container_face(surface)
+                self.raster_paths.append(r)
+                self.raster_normals.extend([surface.normal for i in range(len(r))])

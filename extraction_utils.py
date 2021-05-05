@@ -14,7 +14,7 @@ from container import Container
 
 CONTAINER_HEIGHT = 8.5 * 0.3048  # 8.5 ft to meters
 CONTAINER_EPS = 0.75  # to account for height error
-RASTER_TICK_SIZE = 0.5  # in meters
+RASTER_TICK_SIZE = 1.5  # in meters
 
 
 def get_color_palette(num_colors=20):
@@ -192,7 +192,7 @@ def connect_faces(raster_paths):
         path = np.array(path)
         avg_pt = np.sum(path, axis=0) / path.shape[0]
         avg_pts.append(avg_pt)
-    num_pts = len(avg_pts)
+    num_pts = len(raster_paths)
     avg_pts = np.array(avg_pts)
     tour = np.random.permutation(np.arange(num_pts))
     for temp in np.logspace(5, 0, num=5000):
@@ -252,7 +252,7 @@ def make_connections(tour, avg_pts, raster_paths):
         min_dist = 10000
         min_index = -1
         for j, point in enumerate(second_path):
-            dist = np.sqrt(np.sum(np.power((point - first_point), 2)))
+            dist = np.sqrt(np.sum(np.power((point - first), 2)))
             if dist < min_dist:
                 min_index = j
                 min_dist = dist
@@ -272,21 +272,33 @@ containers - a list of containers
 Returns: bool - whether or not a ray intersects any container
 """
 
+def triangle_intersect(p0, p1, p2, o, d, max_t):
+    e1 = p1 - p0
+    e2 = p2 - p0
+    s = o - p0
+    s1 = np.cross(d, e2)
+    s2 = np.cross(s, e1)
+    y = (1 / np.dot(s1, e1)) * np.array([[np.dot(s2,e2)],[np.dot(s, s1)], [np.dot(s2, d)]])
+    return 0 < y[0] < max_t and 0 <= y[1] <= 1 and 0 <= y[2] <= 1 and 0 <= 1 - y[1] - y[2] <= 1
 
-def intersects_container(origin, direction, max_t, containers):
-    for container_id in range(len(containers)):
-        container = containers[container_id]
+def intersects_container(origin, direction, max_t, cpc):
+    for container_id in range(len(cpc.containers)):
+        container = cpc.containers[container_id]
         for surface_id in range(len(container.surfaces)):
-            pts = container.surfaces[surface_id].points
-            A = pts[0] - pts[1]
-            B = pts[2] - pts[1]
-            C = pts[3]
-            plane_normal = np.cross(A, B)
-            denom = np.dot(direction, plane_normal)
-            if abs(denom) > 0.0001:
-                t = np.dot((C - origin), N) / denom
-                if t < max_t and t > 0:
-                    return True
+            pts = container.surfaces[surface_id].corners
+            t1 = triangle_intersect(pts[0], pts[1], pts[3], origin, direction, max_t)
+            t2 = triangle_intersect(pts[2], pts[1], pts[3], origin, direction, max_t)
+            if t1 and t2:
+                return True
+            # A = pts[0] - pts[1]
+            # B = pts[2] - pts[1]
+            # C = pts[3]
+            # plane_normal = np.cross(A, B)
+            # denom = np.dot(direction, plane_normal)
+            # if abs(denom) > 0.0001:
+            #     t = np.dot((C - origin), plane_normal) / denom
+            #     if t < max_t and t > 0:
+            #         return True
     return False
 
 
@@ -305,31 +317,30 @@ def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
     final_connections = []
     for index, connect in enumerate(connections):
         firstpoint, secondpoint = connect
-        origin = fp[0]
-        direction = sp[0] - fp[0]
+        origin = firstpoint
+        direction = secondpoint - firstpoint
         max_t = 1.0
         count = 0
+        intersected = False
         while intersects_container(origin, direction, max_t, cpc):
+            intersected = True
             if count > 10:
                 print("failure")
                 exit()
             avg_pt = avg_pts[tour[index]]
             avg_pt2 = avg_pts[tour[(index + 1) % len(tour)]]
             if count % 2 == 0:
-                new_o = origin + (origin - avg_pt) * 0.1
+                new_o = origin + np.clip((origin - avg_pt) * 0.1, a_max=3.0, a_min=-3.0)
                 origin = new_o
             else:
-                new_d = secondpoint[0] + (secondpoint[0] - avg_pt2) * 0.1
+                new_d = secondpoint + np.clip((secondpoint - avg_pt2) * 0.1, a_max=3.0, a_min=-3.0)
                 direction = new_d - origin
-        first_point = (firstpoint, origin)
-        second_point = (secondpoint, origin + direction)
-        final_connections.append([first_point, second_point])
-    final_path = []
-    for index in enumerate(final_connections):
-        final_path.extend(cpc.raster_paths[index])
-        final_path.extend(final_connections[index])
-    final_path.extend(cpc.raster_paths[len(final_connections)])
-    return final_path
+            count+=1
+        if intersected:
+            final_connections.append([firstpoint, origin, origin+direction, secondpoint])
+        else:
+            final_connections.append([])
+    return final_connections
 
 
 def rasterize_container_face(surface, offset=0.75, alpha=0.65):  # pylint: disable=too-many-locals
