@@ -66,7 +66,7 @@ def main():
     final_connections = extraction_utils.make_full_path(tour, avg_pts,
                                                         cpc.raster_paths,
                                                         connections,
-                                                        cpc.containers)
+                                                        cpc)
 
     if args.graph:
         extraction_utils.plot_container_surfaces(cpc.containers)
