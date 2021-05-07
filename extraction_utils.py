@@ -339,7 +339,7 @@ def make_full_path(tour, avg_pts, raster_paths, connections, cpc):
         if intersected:
             final_connections.append([firstpoint, origin, origin+direction, secondpoint])
         else:
-            final_connections.append([])
+            final_connections.append(connect)
     return final_connections
 
 
