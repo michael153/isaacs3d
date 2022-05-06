@@ -4,8 +4,9 @@ from GridMap2D import GridMap2D
 from GridMap2_5D import GridMap2_5D
 from Drone import Drone
 from Flight import Flight
-from waypoint_server_interface import WaypointServerInterface
+from isaacs_server_interface import IsaacsServerInterface
 import extraction_utils
+import interface_utils
 import sys
 import math
 import argparse
@@ -66,7 +67,14 @@ class Search:
 			return False
 
 		self._initialized = True
-		self.pub = rospy.Publisher('waypoints', Waypoints, queue_size=1)
+		self.interface = IsaacsServerInterface(radiation_topic="/lamp/data",
+                                      waypoint_topic="/mavros/mission/reached",
+                                      origin=rsf_origin)
+    	self.interface.start_client()
+    	topics_published = [{"name": "/lamp/data", "type": "geometry_msgs/Vector3"}]
+	    self.interface.get_drone_id("hexacopter")
+	    interface_utils.save_topics_to_drone(interface.client, 1, topics_published)
+		#self.pub = rospy.Publisher('waypoints', Waypoints, queue_size=1)
 		return self._initialized
 
 	def load_parameters(self):
@@ -317,10 +325,22 @@ class Search:
 	new_measurement -- callback function from the search algorithm for new measurements
 	"""
 	def fly_round(self, path, new_measurement):
-		rospy.wait_for_service(self._move_service)
-		self._move = rospy.ServiceProxy(self._move_service, std_srvs.srv.Empty)
-		rospy.wait_for_service(self._sensor_reading)
-		self._get_measurement = rospy.ServiceProxy(self._sensor_reading,SensorReading) 
+		waypoints = []
+		times = []
+
+		for sensing_config in path:
+			p = sensing_config[0]
+			t = sensing_config[1]
+
+			waypoints.append(p)
+			times.append(t * 1000)
+		self.interface.send_waypoints(waypoints,times)
+		self.interface.start_mission()
+
+		# rospy.wait_for_service(self._move_service)
+		# self._move = rospy.ServiceProxy(self._move_service, std_srvs.srv.Empty)
+		# rospy.wait_for_service(self._sensor_reading)
+		# self._get_measurement = rospy.ServiceProxy(self._sensor_reading,SensorReading) 
 		#flight = Flight(path, self.drone, self.grid_map, new_measurement, self.move_drone)
 		#flight.start()
 		for sensing_config in path:
@@ -339,6 +359,8 @@ class Search:
 
 				self.grid_map.update_sets(lcb, ucb)
 		self._move = None
+
+		move_on = raw_input("Ready to keep going?")
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument("-v", "--verbose", help="Verbose", default=False, type=bool)
